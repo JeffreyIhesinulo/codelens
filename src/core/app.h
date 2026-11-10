@@ -63,6 +63,10 @@ struct TestResult {
 
 TestResult check_code(const Lesson& lesson, const std::string& code);
 
+// Explains where two outputs first differ, e.g. missing "." at the end of line 2.
+// Ignores trailing spaces and trailing empty lines. "" if equal.
+std::string describe_difference(const std::string& expected, const std::string& got);
+
 // ---------------------------------------------------------------- Progress
 struct Progress {
     std::set<std::string> completed;   // lesson ids
@@ -79,6 +83,8 @@ bool ai_available();                           // is Ollama reachable? (cached, 
 std::string ai_model();
 
 int  ai_explain_error(const std::string& code, const std::string& errors);
-int  ai_hint(const Lesson& lesson, const std::string& code, int level);   // level 1..3
-int  ai_chat(const Lesson& lesson, const std::string& code, const std::string& question);
+// last_result: the latest compile errors / test failure / memory error shown to the student ("" if none).
+int  ai_hint(const Lesson& lesson, const std::string& code, const std::string& last_result, int level);  // level 1..3
+int  ai_chat(const Lesson& lesson, const std::string& code, const std::string& last_result,
+             const std::string& question);
 bool ai_poll(int request_id, std::string& answer);

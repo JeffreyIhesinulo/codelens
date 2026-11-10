@@ -332,13 +332,13 @@ void LessonScreen::draw_ai(App& app, Rectangle r) {
     }
     if (button({body.x + half + 8, cy, half, 36}, hint_label, !waiting)) {
         hint_level = std::min(hint_level + 1, 3);
-        ask_ai(ai_hint(l, editor.numbered_text(), hint_level), "Give me a hint (level " + std::to_string(hint_level) + ").");
+        ask_ai(ai_hint(l, editor.numbered_text(), last_error, hint_level), "Give me a hint (level " + std::to_string(hint_level) + ").");
     }
     Rectangle in_r = {body.x, cy + 44, body.width - 76, 36};
     bool enter = text_input(in_r, question, "Ask about your code…");
     bool ask = button({body.x + body.width - 68, cy + 44, 68, 36}, "Ask", !waiting && !question.text.empty(), ButtonStyle::Primary);
     if ((enter || ask) && !waiting && !question.text.empty()) {
-        ask_ai(ai_chat(l, editor.numbered_text(), question.text), question.text);
+        ask_ai(ai_chat(l, editor.numbered_text(), last_error, question.text), question.text);
         question.text.clear();
     }
 

@@ -105,9 +105,21 @@ static const char* SYSTEM_PROMPT =
     "Rules: answer in plain English, short (at most 5 sentences unless asked for more). "
     "Never write the complete solution to the student's exercise. "
     "You may show at most 2 lines of code to illustrate a point. "
-    "Refer to line numbers when they help. Do not use markdown headings.";
+    "Refer to line numbers when they help. Do not use markdown headings. "
+    "The lesson's tests are always correct: never suggest that the test or the checker is wrong. "
+    "When a test fails with wrong output, compare the expected and actual output character by character "
+    "(punctuation, spaces, capital letters, missing or extra lines) and point to the exact difference. "
+    "The app's own diff line ('First difference on line ...') is reliable; build on it.";
 
-static std::string lang_name(Lang l) { return l == Lang::C ? "C" : "C++"; }
+// Lesson task + the latest result the student saw, shared by hint and chat.
+static std::string context(const Lesson& lesson, const std::string& code, const std::string& last_result) {
+    std::string s = "Lesson \"" + lesson.title + "\" (" + std::string(lesson.lang == Lang::C ? "C" : "C++") + ").\n"
+                    "Task and theory:\n" + lesson.theory + "\n\n"
+                    "Student's code (with line numbers):\n" + code + "\n";
+    if (!last_result.empty()) s += "\nLatest result the student got:\n" + last_result + "\n";
+    else s += "\nThe student has not run the tests yet, or the last run had no problems.\n";
+    return s;
+}
 
 static std::string ask(const std::string& user_message) {
     json req = {
@@ -182,20 +194,18 @@ int ai_explain_error(const std::string& code, const std::string& errors) {
         "\n\nErrors:\n" + errors);
 }
 
-int ai_hint(const Lesson& lesson, const std::string& code, int level) {
+int ai_hint(const Lesson& lesson, const std::string& code, const std::string& last_result, int level) {
     std::string how =
         level <= 1 ? "Give a single guiding question that helps them find the problem themselves." :
         level == 2 ? "Point out what exactly is wrong or missing, without giving code." :
-                     "Describe the approach step by step in words. Still no complete code.";
-    return submit(
-        "Exercise (" + lang_name(lesson.lang) + ", lesson \"" + lesson.title + "\"):\n" + lesson.theory +
-        "\n\nStudent's current code:\n" + code + "\n\nHint level " + std::to_string(level) + ". " + how);
+                     "Describe the fix step by step in words. Still no complete code.";
+    return submit(context(lesson, code, last_result) +
+                  "\nHint level " + std::to_string(level) + " of 3. " + how);
 }
 
-int ai_chat(const Lesson& lesson, const std::string& code, const std::string& question) {
-    return submit(
-        "Current lesson: \"" + lesson.title + "\" (" + lang_name(lesson.lang) + ").\n"
-        "Student's code:\n" + code + "\n\nStudent asks: " + question);
+int ai_chat(const Lesson& lesson, const std::string& code, const std::string& last_result,
+            const std::string& question) {
+    return submit(context(lesson, code, last_result) + "\nStudent asks: " + question);
 }
 
 bool ai_poll(int request_id, std::string& answer) {

@@ -181,6 +181,34 @@ TEST(test_check_messages) {
     CHECK(broken.first_failure.find("does not compile") != std::string::npos);
 }
 
+TEST(test_describe_difference) {
+    // the bug from lesson 1: missing "." at the end of line 2
+    std::string d = describe_difference("Hello, CodeLens!\nI am learning C.\n", "Hello, CodeLens!\nI am learning C");
+    CHECK(d.find("line 2") != std::string::npos);
+    CHECK(d.find("missing \".\" at the end") != std::string::npos);
+
+    d = describe_difference("Hello\n", "hello\n");
+    CHECK(d.find("expected \"H\" but got \"h\" at column 1") != std::string::npos);
+
+    d = describe_difference("a b\n", "a  b\n");
+    CHECK(d.find("expected \"b\" but got a space at column 3") != std::string::npos);
+
+    d = describe_difference("1\n2\n", "1\n");
+    CHECK(d.find("missing line 2") != std::string::npos);
+
+    d = describe_difference("1\n", "1\n2\n");
+    CHECK(d.find("extra line 2") != std::string::npos);
+
+    CHECK(describe_difference("ok\n", "ok   \n\n").empty());   // trailing spaces / lines ignored
+
+    // the message the student sees contains the explanation
+    Lesson l; std::string err;
+    lesson_parse("@id t\n@title t\n@test\n@expected\nHello, CodeLens!\nI am learning C.\n", l, err);
+    TestResult r = check_code(l, "#include <stdio.h>\nint main(void){ printf(\"Hello, CodeLens!\\nI am learning C\"); return 0; }\n");
+    CHECK(r.passed == 0);
+    CHECK(r.first_failure.find("missing \".\" at the end of the line") != std::string::npos);
+}
+
 TEST(test_progress) {
     Progress p;
     p.completed = {"01_hello", "03_loops"};
@@ -239,7 +267,7 @@ TEST(test_ai_fake_server) {
     CHECK(ai_model() == "test-model");
 
     Lesson l; l.title = "Arrays";
-    int id = ai_chat(l, "int main(){}", "why?");
+    int id = ai_chat(l, "int main(){}", "Test 1 failed", "why?");
     std::string answer;
     bool got = false;
     for (int i = 0; i < 100 && !got; ++i) {
@@ -269,6 +297,7 @@ int main() {
     RUN(test_lesson_parse);
     RUN(test_all_lessons_solvable);
     RUN(test_check_messages);
+    RUN(test_describe_difference);
     RUN(test_progress);
     RUN(test_ai_fake_server);
 
