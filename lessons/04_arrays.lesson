@@ -1,0 +1,73 @@
+@id     04_arrays
+@title  Arrays
+@topic  arrays
+@lang   c
+
+@theory
+An array stores several values of the same type next to each other in memory.
+
+    int a[5];        // indexes 0, 1, 2, 3, 4
+    a[0] = 7;
+
+The last valid index is size - 1. Reading a[5] here is a bug: it touches memory
+that does not belong to the array. CodeLens builds your code with AddressSanitizer,
+so this kind of bug is reported instead of silently giving garbage.
+
+Your task: read n (1..100), then n integers, and print the largest one.
+
+Input:   4
+         3 9 -2 5
+Output:  9
+
+@starter
+#include <stdio.h>
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+
+    int a[100];
+    for (int i = 0; i < n; i++) {
+        scanf("%d", &a[i]);
+    }
+
+    // find the largest element
+
+    return 0;
+}
+
+@solution
+#include <stdio.h>
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+    int a[100];
+    for (int i = 0; i < n; i++) scanf("%d", &a[i]);
+    int best = a[0];
+    for (int i = 1; i < n; i++)
+        if (a[i] > best) best = a[i];
+    printf("%d\n", best);
+    return 0;
+}
+
+@test
+@input
+4
+3 9 -2 5
+@expected
+9
+
+@test
+@input
+3
+-5 -1 -7
+@expected
+-1
+
+@hidden_test
+@input
+1
+42
+@expected
+42

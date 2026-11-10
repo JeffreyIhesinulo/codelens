@@ -1,0 +1,43 @@
+@id     01_hello
+@title  Hello, C
+@topic  output
+@lang   c
+
+@theory
+Every C program starts running in main(). To print text, use printf from <stdio.h>.
+
+    #include <stdio.h>
+
+    int main(void) {
+        printf("Hi!\n");
+        return 0;
+    }
+
+"\n" moves to a new line. return 0 tells the system the program finished without errors.
+
+Your task: print exactly two lines:
+Hello, CodeLens!
+I am learning C.
+
+@starter
+#include <stdio.h>
+
+int main(void) {
+    // print the two lines here
+
+    return 0;
+}
+
+@solution
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, CodeLens!\n");
+    printf("I am learning C.\n");
+    return 0;
+}
+
+@test
+@expected
+Hello, CodeLens!
+I am learning C.

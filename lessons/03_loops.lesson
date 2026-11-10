@@ -1,0 +1,68 @@
+@id     03_loops
+@title  Loops
+@topic  for loops
+@lang   c
+
+@theory
+A for loop repeats code a known number of times:
+
+    for (int i = 1; i <= 3; i++) {
+        printf("%d\n", i);
+    }
+
+This prints 1, 2, 3. The three parts are: start (int i = 1), condition (i <= 3), step (i++).
+
+To add numbers up, keep a running total in a variable that starts at 0.
+
+Your task: read n and print the sum 1 + 2 + ... + n.
+For n = 5 the answer is 15. For n = 0 the answer is 0.
+
+@starter
+#include <stdio.h>
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+
+    int sum = 0;
+    // add 1..n to sum
+
+    printf("%d\n", sum);
+    return 0;
+}
+
+@solution
+#include <stdio.h>
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+    int sum = 0;
+    for (int i = 1; i <= n; i++) sum += i;
+    printf("%d\n", sum);
+    return 0;
+}
+
+@test
+@input
+5
+@expected
+15
+
+@test
+@input
+1
+@expected
+1
+
+@hidden_test
+@input
+0
+@expected
+0
+
+@hidden_test
+@input
+100
+@expected
+5050
