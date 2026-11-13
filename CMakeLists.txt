@@ -10,7 +10,8 @@ include(FetchContent)
 
 # nlohmann/json (single header) — used by the AI client
 FetchContent_Declare(json
-  URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+  URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(json)
 
 find_package(Threads REQUIRED)
@@ -25,7 +26,11 @@ target_compile_options(core PRIVATE -Wall -Wextra)
 # ---------- Tests ----------
 add_executable(tests tests/tests.cpp)
 target_link_libraries(tests PRIVATE core)
-target_compile_definitions(tests PRIVATE LESSONS_DIR="${CMAKE_SOURCE_DIR}/lessons")
+target_compile_definitions(tests PRIVATE LESSONS_DIR="${CMAKE_SOURCE_DIR}/lessons"
+                                         FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
+# Regenerates tests/fixtures/*.json (memory snapshots for the visualizer)
+add_executable(make_fixtures tests/make_fixtures.cpp)
+target_link_libraries(make_fixtures PRIVATE core)
 enable_testing()
 add_test(NAME core_tests COMMAND tests)
 

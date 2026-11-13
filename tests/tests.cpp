@@ -1,9 +1,12 @@
 // Engine unit tests. Run: ./build/tests   (exit code 0 = all passed)
 #include "app.h"
+#include "mi.h"
 
 #include <arpa/inet.h>
 #include <chrono>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <thread>
@@ -166,6 +169,34 @@ TEST(test_all_lessons_solvable) {
     }
 }
 
+TEST(test_all_lesson_steps_valid) {
+    for (const Lesson& l : lessons_load(LESSONS_DIR)) {
+        for (size_t i = 0; i < l.steps.size(); ++i) {
+            const Step& st = l.steps[i];
+            std::string where = l.id + " step " + std::to_string(i + 1) + " (" + step_kind_name(st.kind) + ")";
+            if (st.kind == StepKind::Predict) {
+                // the right answer can be computed, and giving it back counts as correct
+                Verdict v = check_prediction(st, l.lang, "");
+                Verdict again = check_prediction(st, l.lang, v.expected);
+                if (!again.correct) std::printf("  %s: %s\n", where.c_str(), v.feedback.c_str());
+                CHECK(!v.expected.empty() && again.correct);
+            }
+            if (st.kind == StepKind::FindBug || st.kind == StepKind::Modify) {
+                Lesson tmp = l; tmp.tests = st.tests;
+                TestResult good = check_code(tmp, st.solution), bad = check_code(tmp, st.starter);
+                if (good.passed != good.total) std::printf("  %s: solution fails: %s\n", where.c_str(), good.first_failure.c_str());
+                CHECK(good.passed == good.total);
+                CHECK(bad.passed < bad.total);   // the starter really has a bug / missing change
+            }
+            if (st.kind == StepKind::Watch) {
+                std::string err;
+                CHECK(debug_start(st.code, l.lang, st.input, err));
+                debug_stop();
+            }
+        }
+    }
+}
+
 TEST(test_check_messages) {
     Lesson l; std::string err;
     lesson_parse("@id t\n@title t\n@test\n@input\n2\n@expected\n4\n@hidden_test\n@input\n5\n@expected\n10\n", l, err);
@@ -283,6 +314,318 @@ TEST(test_ai_fake_server) {
     close(fd);
 }
 
+
+// ---------------------------------------------------------------- GDB/MI parser
+
+TEST(test_mi_parser) {
+    MIRecord r;
+    CHECK(mi_parse_line("12^done,stack=[frame={level=\"0\",func=\"swap\",file=\"main.c\",line=\"5\"},"
+                        "frame={level=\"1\",func=\"main\",file=\"main.c\",line=\"12\"}]", r));
+    CHECK(r.type == '^' && r.token == 12 && r.cls == "done");
+    const MIValue* st = r.results.get("stack");
+    CHECK(st && st->kind == MIValue::List && st->items.size() == 2);
+    if (st && st->items.size() == 2) {
+        CHECK(st->items[0].first == "frame");
+        CHECK(st->items[0].second.text("func") == "swap");
+        CHECK(st->items[1].second.text("line") == "12");
+    }
+
+    CHECK(mi_parse_line("*stopped,reason=\"exited\",exit-code=\"01\"", r));
+    CHECK(r.type == '*' && r.cls == "stopped" && r.results.text("exit-code") == "01");
+
+    CHECK(mi_parse_line("~\"hello \\\"world\\\"\\n\"", r));
+    CHECK(r.type == '~' && r.stream == "hello \"world\"\n");
+
+    CHECK(mi_parse_line("5^done,variables=[{name=\"x\",type=\"int\",value=\"3\"},{name=\"a\",type=\"int [3]\"}]", r));
+    const MIValue* vars = r.results.get("variables");
+    CHECK(vars && vars->items.size() == 2);
+    if (vars && vars->items.size() == 2) {
+        CHECK(vars->items[0].second.text("value") == "3");
+        CHECK(vars->items[1].second.get("value") == nullptr);
+    }
+
+    CHECK(mi_parse_line("(gdb) ", r) && r.type == '(');
+    CHECK(mi_parse_line("^done", r) && r.cls == "done");
+    CHECK(!mi_parse_line("5 3", r));   // program output, not MI
+}
+
+// ---------------------------------------------------------------- steps
+
+TEST(test_lesson_steps) {
+    const char* text =
+        "@id 07_x\n@title X\n@lang c\n"
+        "@theory\nPractice task text\n@starter\nint main(void){}\n"
+        "@test\n@input\n1\n@expected\n2\n"
+        "@step explore\n@scene array   # sliders\n@text\nPlay with it.\n"
+        "@step watch\n@title Watch swap\n@code\nint main(void){ return 0; }\n@input\n5\n"
+        "@step predict\n@code\nint main(void){ int x = 1; x++; return 0; }\n@line 1\n@expr x\n@text\nWhat is x?\n"
+        "@step find_bug\n@starter\nbuggy\n@solution\nfixed\n@test\n@expected\nok\n"
+        "@step explain\n@text\nWhy?\n@rubric\naddress; copy\n@answer\nBecause.\n"
+        "@step practice\n";
+    Lesson l; std::string err;
+    CHECK(lesson_parse(text, l, err));
+    if (!err.empty()) std::printf("  parse error: %s\n", err.c_str());
+    CHECK(l.steps.size() == 6);
+    if (l.steps.size() == 6) {
+        CHECK(l.steps[0].kind == StepKind::Explore && l.steps[0].scene == "array");
+        CHECK(l.steps[1].title == "Watch swap" && l.steps[1].input == "5\n");
+        CHECK(l.steps[2].predict_line == 1 && l.steps[2].predict_expr == "x" && l.steps[2].text == "What is x?");
+        CHECK(l.steps[3].kind == StepKind::FindBug && l.steps[3].tests.size() == 1 && l.steps[3].tests[0].expected == "ok\n");
+        CHECK(l.steps[4].rubric == "address; copy" && l.steps[4].sample_answer == "Because.");
+        CHECK(l.steps[5].kind == StepKind::Practice);
+        CHECK(l.steps[5].tests.size() == 1 && l.steps[5].text == "Practice task text");   // filled from lesson level
+    }
+    CHECK(l.title == "X");   // step @title does not overwrite the lesson title
+
+    // old format -> one practice step
+    Lesson old;
+    CHECK(lesson_parse("@id a\n@title A\n@starter\nx\n@test\n@expected\n1\n", old, err));
+    CHECK(old.steps.size() == 1 && old.steps[0].kind == StepKind::Practice && old.steps[0].starter == "x\n");
+
+    Lesson bad;
+    CHECK(!lesson_parse("@id a\n@title A\n@step dance\n", bad, err));
+    CHECK(err.find("unknown step kind") != std::string::npos);
+    CHECK(!lesson_parse("@id a\n@title A\n@step predict\n@expr x\n@code\nint main(){}\n", bad, err));
+    CHECK(err.find("@line") != std::string::npos);
+    CHECK(!lesson_parse("@id a\n@title A\n@step explore\n", bad, err));
+    CHECK(!lesson_parse("@id a\n@title A\n@code\nx\n", bad, err));   // @code outside a step
+}
+
+// ---------------------------------------------------------------- ProgramState JSON
+
+TEST(test_state_json) {
+    ProgramState s;
+    Frame f; f.function = "main"; f.line = 7;
+    Variable x; x.name = "x"; x.type = "int"; x.value = "5"; x.address = 0x7ffffffde00cULL;
+    Variable p; p.name = "p"; p.type = "int *"; p.value = "0x7ffffffde00c"; p.address = 0x7ffffffde010ULL;
+    p.is_pointer = true; p.points_to = x.address;
+    Variable a; a.name = "a"; a.type = "int [2]"; a.address = 0x7ffffffde020ULL;
+    Variable a0; a0.name = "[0]"; a0.value = "1"; a0.address = 0x7ffffffde020ULL;
+    Variable a1; a1.name = "[1]"; a1.value = "2"; a1.address = 0x7ffffffde024ULL;
+    a.children = {a0, a1};
+    f.vars = {x, p, a};
+    s.stack.push_back(f);
+    HeapBlock h; h.address = 0x55555555a2a0ULL; h.size = 12; h.freed = true;
+    s.heap.push_back(h);
+    s.errors.push_back({"heap-use-after-free", 9, "used after free"});
+    s.note = "hi";
+
+    ProgramState back; std::string err;
+    CHECK(state_from_json(state_to_json(s), back, err));
+    CHECK(back.stack.size() == 1 && back.stack[0].vars.size() == 3);
+    CHECK(back.stack[0].vars[1].points_to == 0x7ffffffde00cULL);   // 64-bit address survives
+    CHECK(back.stack[0].vars[2].children.size() == 2);
+    CHECK(back.heap.size() == 1 && back.heap[0].freed && back.heap[0].size == 12);
+    CHECK(back.errors.size() == 1 && back.errors[0].line == 9);
+    CHECK(back.note == "hi");
+
+    CHECK(state_describe_address(s, 0x7ffffffde00cULL) == "x");
+    CHECK(state_describe_address(s, 0x7ffffffde024ULL) == "a[1]");
+    CHECK(state_describe_address(s, 0x7ffffffde020ULL) == "a[0]");
+    CHECK(state_describe_address(s, 0x55555555a2a4ULL) == "heap block 1 (freed)");
+    CHECK(state_describe_address(s, 0) == "NULL");
+    CHECK(!state_from_json("{not json", back, err));
+}
+
+// ---------------------------------------------------------------- debugger
+
+static const Variable* find_var(const ProgramState& s, const std::string& name) {
+    for (auto f = s.stack.rbegin(); f != s.stack.rend(); ++f)
+        for (const Variable& v : f->vars) if (v.name == name) return &v;
+    return nullptr;
+}
+
+TEST(test_debugger_swap) {
+    const char* code =
+        "#include <stdio.h>\n"                       // 1
+        "void swap(int *a, int *b) {\n"              // 2
+        "    int t = *a;\n"                          // 3
+        "    *a = *b;\n"                             // 4
+        "    *b = t;\n"                              // 5
+        "}\n"                                        // 6
+        "int main(void) {\n"                         // 7
+        "    int x = 3, y = 5;\n"                    // 8
+        "    swap(&x, &y);\n"                        // 9
+        "    printf(\"%d %d\\n\", x, y);\n"          // 10
+        "    return 0;\n"                            // 11
+        "}\n";
+    std::string err;
+    CHECK(debug_start(code, Lang::C, "", err));
+    if (!err.empty()) { std::printf("  %s\n", err.c_str()); return; }
+    CHECK(debug_state().line == 8);
+    CHECK(debug_next());
+    CHECK(debug_state().line == 9);
+    CHECK(debug_step());                                   // into swap
+    const ProgramState& s = debug_state();
+    CHECK(s.stack.size() == 2 && s.stack.back().function == "swap");
+    const Variable* a = find_var(s, "a");
+    CHECK(a && a->is_pointer && state_describe_address(s, a->points_to) == "x");
+    CHECK(debug_finish());                                 // back to main
+    CHECK(debug_state().stack.size() == 1 && debug_state().line == 10);
+    const Variable* x = find_var(debug_state(), "x");
+    CHECK(x && x->value == "5");
+    CHECK(debug_next());
+    CHECK(debug_state().output == "5 3\n");
+    while (debug_active()) debug_next();
+    CHECK(debug_state().finished && debug_state().exit_code == 0);
+    debug_stop();
+}
+
+TEST(test_debugger_heap_and_leak) {
+    const char* code =
+        "#include <stdlib.h>\n"                      // 1
+        "int main(void) {\n"                         // 2
+        "    int *a = malloc(3 * sizeof(int));\n"    // 3
+        "    a[0] = 7; a[1] = 8; a[2] = 9;\n"        // 4
+        "    int *b = malloc(16);\n"                 // 5
+        "    free(a);\n"                             // 6
+        "    return 0;\n"                            // 7
+        "}\n";
+    std::string err;
+    CHECK(debug_start(code, Lang::C, "", err));
+    CHECK(debug_run_to_line(5));
+    const ProgramState& s = debug_state();
+    CHECK(s.heap.size() == 1);
+    if (s.heap.size() == 1) {
+        CHECK(s.heap[0].size == 12 && !s.heap[0].freed);
+        CHECK(s.heap[0].cells.size() == 3 && s.heap[0].cells[2].value == "9");
+    }
+    CHECK(debug_run_to_line(7));
+    CHECK(debug_state().heap.size() == 2 && debug_state().heap[0].freed && !debug_state().heap[1].freed);
+    while (debug_active()) debug_next();
+    bool leak = false;
+    for (const MemoryError& e : debug_state().errors) leak |= e.kind == "memory-leak";
+    CHECK(leak);   // b was never freed
+    debug_stop();
+}
+
+TEST(test_debugger_segfault) {
+    const char* code =
+        "#include <stddef.h>\n"
+        "int main(void) {\n"
+        "    int *p = NULL;\n"
+        "    *p = 5;\n"
+        "    return 0;\n"
+        "}\n";
+    std::string err;
+    CHECK(debug_start(code, Lang::C, "", err));
+    while (debug_active()) debug_next();
+    const ProgramState& s = debug_state();
+    CHECK(s.finished);
+    CHECK(!s.errors.empty() && s.errors[0].kind == "SEGV" && s.errors[0].line == 4);
+    debug_stop();
+}
+
+TEST(test_debugger_infinite_loop) {
+    const char* code =
+        "void spin(void) {\n"        // 1
+        "    while (1) {}\n"         // 2
+        "}\n"                        // 3
+        "int main(void) {\n"         // 4
+        "    spin();\n"              // 5
+        "    return 0;\n"            // 6
+        "}\n";
+    std::string err;
+    CHECK(debug_start(code, Lang::C, "", err));
+    auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 3 && debug_active(); ++i) debug_next();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    CHECK(ms < 9000);
+    // "next" over spin() never returns: the debugger interrupts it and stops with a note
+    CHECK(debug_state().finished);
+    CHECK(debug_state().note.find("infinite loop") != std::string::npos);
+    debug_stop();
+}
+
+TEST(test_debugger_recursion_and_stdin) {
+    const char* code =
+        "#include <stdio.h>\n"                                       // 1
+        "int fact(int n) {\n"                                        // 2
+        "    if (n <= 1) return 1;\n"                                // 3
+        "    return n * fact(n - 1);\n"                              // 4
+        "}\n"                                                        // 5
+        "int main(void) {\n"                                         // 6
+        "    int n;\n"                                               // 7
+        "    scanf(\"%d\", &n);\n"                                   // 8
+        "    printf(\"%d\\n\", fact(n));\n"                          // 9
+        "    return 0;\n"                                            // 10
+        "}\n";
+    std::string err;
+    CHECK(debug_start(code, Lang::C, "4\n", err));
+    CHECK(debug_run_to_line(3));           // first time: n = 4
+    CHECK(debug_run_to_line(3));           // n = 3
+    CHECK(debug_run_to_line(3));           // n = 2
+    CHECK(debug_run_to_line(3));           // n = 1
+    const ProgramState& s = debug_state();
+    CHECK(s.stack.size() == 5);            // main + fact(4..1)
+    const Variable* n = s.stack.empty() ? nullptr : (s.stack.back().vars.empty() ? nullptr : &s.stack.back().vars[0]);
+    CHECK(n && n->value == "1");
+    while (debug_active()) debug_next();
+    CHECK(debug_state().output == "24\n");
+    debug_stop();
+}
+
+TEST(test_debugger_compile_error) {
+    std::string err;
+    CHECK(!debug_start("int main(void) { return }\n", Lang::C, "", err));
+    CHECK(err.find("main.c") != std::string::npos);
+    CHECK(err.find("/tmp/") == std::string::npos);
+    CHECK(!debug_active());
+}
+
+TEST(test_fixtures_load) {
+    for (const char* name : {"swap", "array", "struct", "heap", "leak", "recursion", "null_crash"}) {
+        std::ifstream f(std::string(FIXTURES_DIR) + "/" + name + ".json");
+        std::stringstream ss; ss << f.rdbuf();
+        ProgramState s; std::string err;
+        bool ok = state_from_json(ss.str(), s, err);
+        if (!ok) std::printf("  %s: %s\n", name, err.c_str());
+        CHECK(ok && !s.note.empty());
+    }
+    std::ifstream f(std::string(FIXTURES_DIR) + "/swap.json");
+    std::stringstream ss; ss << f.rdbuf();
+    ProgramState s; std::string err;
+    state_from_json(ss.str(), s, err);
+    const Variable* a = find_var(s, "a");
+    CHECK(a && state_describe_address(s, a->points_to) == "x");
+}
+
+// ---------------------------------------------------------------- predictions
+
+TEST(test_check_prediction) {
+    Step s;
+    s.kind = StepKind::Predict;
+    s.code =
+        "#include <stdio.h>\n"                       // 1
+        "int main(void) {\n"                         // 2
+        "    int x = 3;\n"                           // 3
+        "    int *p = &x;\n"                         // 4
+        "    *p = 10;\n"                             // 5
+        "    char c = 'A' + 2;\n"                    // 6
+        "    printf(\"%d %c\\n\", x, c);\n"          // 7
+        "    return 0;\n"                            // 8
+        "}\n";
+    s.predict_line = 5; s.predict_expr = "x";
+    CHECK(check_prediction(s, Lang::C, "10").correct);
+    Verdict wrong = check_prediction(s, Lang::C, "3");
+    CHECK(!wrong.correct && wrong.expected == "10");
+    CHECK(wrong.feedback.find("after line 5") != std::string::npos);
+
+    s.predict_line = 4; s.predict_expr = "p";      // pointers: answer with the target
+    CHECK(check_prediction(s, Lang::C, "&x").correct);
+    CHECK(check_prediction(s, Lang::C, "x").correct);
+    CHECK(!check_prediction(s, Lang::C, "3").correct);
+
+    s.predict_line = 6; s.predict_expr = "c";      // chars: 'C', C or 67
+    CHECK(check_prediction(s, Lang::C, "'C'").correct);
+    CHECK(check_prediction(s, Lang::C, "67").correct);
+
+    s.predict_expr = "";                           // predict the output
+    CHECK(check_prediction(s, Lang::C, "10 C").correct);
+    Verdict out = check_prediction(s, Lang::C, "10 A");
+    CHECK(!out.correct && out.feedback.find("column 4") != std::string::npos);
+}
+
 int main() {
     RUN(test_hello);
     RUN(test_stdin);
@@ -300,6 +643,18 @@ int main() {
     RUN(test_describe_difference);
     RUN(test_progress);
     RUN(test_ai_fake_server);
+    RUN(test_mi_parser);
+    RUN(test_lesson_steps);
+    RUN(test_state_json);
+    RUN(test_debugger_swap);
+    RUN(test_debugger_heap_and_leak);
+    RUN(test_debugger_segfault);
+    RUN(test_debugger_infinite_loop);
+    RUN(test_debugger_recursion_and_stdin);
+    RUN(test_debugger_compile_error);
+    RUN(test_check_prediction);
+    RUN(test_all_lesson_steps_valid);
+    RUN(test_fixtures_load);
 
     std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed == 0 ? 0 : 1;

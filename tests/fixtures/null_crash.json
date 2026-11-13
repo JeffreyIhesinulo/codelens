@@ -1,0 +1,31 @@
+{
+  "errors": [
+    {
+      "details": "Segmentation fault: the program used an invalid pointer",
+      "kind": "SEGV",
+      "line": 4
+    }
+  ],
+  "exit_code": 0,
+  "finished": true,
+  "heap": [],
+  "line": 4,
+  "note": "Writing through a NULL pointer: segmentation fault on line 4.",
+  "output": "",
+  "stack": [
+    {
+      "function": "main",
+      "line": 4,
+      "vars": [
+        {
+          "address": "0x7fffffff61b8",
+          "is_pointer": true,
+          "name": "p",
+          "points_to": "0x0",
+          "type": "int *",
+          "value": "0x0"
+        }
+      ]
+    }
+  ]
+}
