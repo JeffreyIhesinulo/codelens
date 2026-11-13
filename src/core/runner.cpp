@@ -1,5 +1,6 @@
 // Compiles and runs student code in a child process with a time limit.
 #include "app.h"
+#include "internal.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -17,18 +18,10 @@
 
 static const size_t MAX_OUTPUT = 64 * 1024;
 
-struct ExecResult {
-    std::string out, err;
-    int  exit_code = -1;
-    int  signal = 0;
-    bool timed_out = false;
-    bool started = false;
-};
-
 // Runs argv with stdin_text on stdin. Captures stdout/stderr. Kills after timeout_ms.
-static ExecResult exec_capture(const std::vector<std::string>& argv,
-                               const std::string& stdin_text, int timeout_ms,
-                               const std::vector<std::string>& env_extra = {}) {
+ExecResult exec_capture(const std::vector<std::string>& argv,
+                        const std::string& stdin_text, int timeout_ms,
+                        const std::vector<std::string>& env_extra) {
     ExecResult r;
     int in_pipe[2], out_pipe[2], err_pipe[2];
     if (pipe(in_pipe) || pipe(out_pipe) || pipe(err_pipe)) return r;

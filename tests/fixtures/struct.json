@@ -1,0 +1,57 @@
+{
+  "errors": [],
+  "exit_code": 0,
+  "finished": false,
+  "heap": [],
+  "line": 8,
+  "note": "A struct with a char array field, a pointer to it, and a string.",
+  "output": "",
+  "stack": [
+    {
+      "function": "main",
+      "line": 8,
+      "vars": [
+        {
+          "address": "0x7fffffff61a0",
+          "children": [
+            {
+              "address": "0x7fffffff61a0",
+              "name": "id",
+              "type": "int",
+              "value": "42"
+            },
+            {
+              "address": "0x7fffffff61a8",
+              "name": "grade",
+              "type": "double",
+              "value": "3.8999999999999999"
+            },
+            {
+              "address": "0x7fffffff61b0",
+              "name": "name",
+              "type": "char [8]",
+              "value": "\"Ann\""
+            }
+          ],
+          "name": "s",
+          "type": "struct student",
+          "value": ""
+        },
+        {
+          "address": "0x7fffffff61b8",
+          "is_pointer": true,
+          "name": "ps",
+          "points_to": "0x7fffffff61a0",
+          "type": "struct student *",
+          "value": "0x7fffffff61a0"
+        },
+        {
+          "address": "0x7fffffff619a",
+          "name": "word",
+          "type": "char [6]",
+          "value": "\"hello\""
+        }
+      ]
+    }
+  ]
+}

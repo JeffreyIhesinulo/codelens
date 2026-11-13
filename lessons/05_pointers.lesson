@@ -71,3 +71,147 @@ int main(void) {
 7 7
 @expected
 7 7
+
+#! ------------------------------------------------------------------
+#! Steps: Explore -> Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step explore
+@title  Where does the arrow go?
+@scene  pointer_basics
+@text
+Press the buttons and watch the arrow. p = &a stores the address of a in p.
+*p = 5 changes whatever p points at. Try *p = 5 while p is NULL.
+
+@step watch
+@title  Watch swap
+@code
+#include <stdio.h>
+
+void swap(int *a, int *b) {
+    int t = *a;
+    *a = *b;
+    *b = t;
+}
+
+int main(void) {
+    int x = 3, y = 5;
+    swap(&x, &y);
+    printf("%d %d\n", x, y);
+    return 0;
+}
+@text
+Step through the program. On line 11 press "Step into" to enter swap,
+then watch where a and b point and how x and y change.
+
+@step predict
+@title  Predict a value
+@code
+#include <stdio.h>
+
+int main(void) {
+    int x = 3;
+    int *p = &x;
+    *p = 10;
+    printf("%d\n", x);
+    return 0;
+}
+@line   6
+@expr   x
+@text
+What is the value of x after line 6 runs?
+
+@step predict
+@title  Predict the target
+@code
+#include <stdio.h>
+
+int main(void) {
+    int x = 3, y = 7;
+    int *p = &x;
+    p = &y;
+    *p = 1;
+    printf("%d %d\n", x, y);
+    return 0;
+}
+@line   6
+@expr   p
+@text
+After line 6 runs, which variable does p point at?
+
+@step predict
+@title  Predict the output
+@code
+#include <stdio.h>
+
+int main(void) {
+    int x = 3, y = 7;
+    int *p = &x;
+    p = &y;
+    *p = 1;
+    printf("%d %d\n", x, y);
+    return 0;
+}
+@text
+What does this program print?
+
+@step find_bug
+@title  Find the bug
+@text
+This swap does not swap anything. Use the debugger to see why, then fix it.
+The program reads two numbers and should print them swapped.
+@starter
+#include <stdio.h>
+
+void swap(int a, int b) {
+    int t = a;
+    a = b;
+    b = t;
+}
+
+int main(void) {
+    int x, y;
+    scanf("%d %d", &x, &y);
+    swap(x, y);
+    printf("%d %d\n", x, y);
+    return 0;
+}
+@solution
+#include <stdio.h>
+
+void swap(int *a, int *b) {
+    int t = *a;
+    *a = *b;
+    *b = t;
+}
+
+int main(void) {
+    int x, y;
+    scanf("%d %d", &x, &y);
+    swap(&x, &y);
+    printf("%d %d\n", x, y);
+    return 0;
+}
+@test
+@input
+3 5
+@expected
+5 3
+@hidden_test
+@input
+-1 8
+@expected
+8 -1
+
+@step explain
+@title  Explain it
+@text
+Why does swap need pointers? Why doesn't swap(int a, int b) work?
+@rubric
+copy; address; caller's variables
+@answer
+C passes arguments by value: swap(int a, int b) gets copies of x and y, so changing
+the copies does not change the caller's variables. Passing &x gives swap the address
+of x, so *a = ... writes to x itself.
+
+@step practice

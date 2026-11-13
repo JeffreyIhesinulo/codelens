@@ -1,0 +1,57 @@
+{
+  "errors": [],
+  "exit_code": 0,
+  "finished": false,
+  "heap": [],
+  "line": 5,
+  "note": "Inside swap(): a and b point at main's x and y.",
+  "output": "",
+  "stack": [
+    {
+      "function": "main",
+      "line": 9,
+      "vars": [
+        {
+          "address": "0x7fffffff61bc",
+          "name": "x",
+          "type": "int",
+          "value": "5"
+        },
+        {
+          "address": "0x7fffffff61b8",
+          "name": "y",
+          "type": "int",
+          "value": "5"
+        }
+      ]
+    },
+    {
+      "function": "swap",
+      "line": 5,
+      "vars": [
+        {
+          "address": "0x7fffffff6188",
+          "is_pointer": true,
+          "name": "a",
+          "points_to": "0x7fffffff61bc",
+          "type": "int *",
+          "value": "0x7fffffff61bc"
+        },
+        {
+          "address": "0x7fffffff6180",
+          "is_pointer": true,
+          "name": "b",
+          "points_to": "0x7fffffff61b8",
+          "type": "int *",
+          "value": "0x7fffffff61b8"
+        },
+        {
+          "address": "0x7fffffff619c",
+          "name": "t",
+          "type": "int",
+          "value": "3"
+        }
+      ]
+    }
+  ]
+}

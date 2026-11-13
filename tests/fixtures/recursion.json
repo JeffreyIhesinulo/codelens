@@ -1,0 +1,64 @@
+{
+  "errors": [],
+  "exit_code": 0,
+  "finished": false,
+  "heap": [],
+  "line": 3,
+  "note": "fact(4) at its deepest call: five frames on the stack.",
+  "output": "",
+  "stack": [
+    {
+      "function": "main",
+      "line": 7,
+      "vars": []
+    },
+    {
+      "function": "fact",
+      "line": 4,
+      "vars": [
+        {
+          "address": "0x7fffffff61ac",
+          "name": "n",
+          "type": "int",
+          "value": "4"
+        }
+      ]
+    },
+    {
+      "function": "fact",
+      "line": 4,
+      "vars": [
+        {
+          "address": "0x7fffffff618c",
+          "name": "n",
+          "type": "int",
+          "value": "3"
+        }
+      ]
+    },
+    {
+      "function": "fact",
+      "line": 4,
+      "vars": [
+        {
+          "address": "0x7fffffff616c",
+          "name": "n",
+          "type": "int",
+          "value": "2"
+        }
+      ]
+    },
+    {
+      "function": "fact",
+      "line": 3,
+      "vars": [
+        {
+          "address": "0x7fffffff614c",
+          "name": "n",
+          "type": "int",
+          "value": "1"
+        }
+      ]
+    }
+  ]
+}

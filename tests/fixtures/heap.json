@@ -1,0 +1,65 @@
+{
+  "errors": [],
+  "exit_code": 0,
+  "finished": false,
+  "heap": [
+    {
+      "address": "0x55555555a2a0",
+      "cells": [
+        {
+          "address": "0x55555555a2a0",
+          "name": "[0]",
+          "type": "int",
+          "value": "1"
+        },
+        {
+          "address": "0x55555555a2a4",
+          "name": "[1]",
+          "type": "int",
+          "value": "2"
+        },
+        {
+          "address": "0x55555555a2a8",
+          "name": "[2]",
+          "type": "int",
+          "value": "3"
+        }
+      ],
+      "freed": false,
+      "size": 12
+    },
+    {
+      "address": "0x55555555a2c0",
+      "cells": [],
+      "freed": true,
+      "size": 16
+    }
+  ],
+  "line": 7,
+  "note": "A live heap block (int[3]) and a freed block with a dangling pointer.",
+  "output": "",
+  "stack": [
+    {
+      "function": "main",
+      "line": 7,
+      "vars": [
+        {
+          "address": "0x7fffffff61b8",
+          "is_pointer": true,
+          "name": "nums",
+          "points_to": "0x55555555a2a0",
+          "type": "int *",
+          "value": "0x55555555a2a0"
+        },
+        {
+          "address": "0x7fffffff61b0",
+          "is_pointer": true,
+          "name": "old",
+          "points_to": "0x55555555a2c0",
+          "type": "int *",
+          "value": "0x55555555a2c0"
+        }
+      ]
+    }
+  ]
+}

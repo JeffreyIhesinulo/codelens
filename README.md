@@ -57,13 +57,18 @@ src/core/     engine — no raylib (Jeffrey)
   checker.cpp   runs lesson tests
   lessons.cpp   lesson file parser, progress
   ai.cpp        Ollama client, background requests, prompts
+  debugger.cpp  step-by-step execution through GDB/MI, stack + heap snapshots, check_prediction
+  mi.cpp        parser for GDB/MI output
+  state.cpp     ProgramState <-> JSON, address lookup ("p points at x")
+  scenes.cpp    Explore scenes (planned for week 3)
 src/ui/       raylib interface (Igor)
   main.cpp, ui.h, widgets.cpp     window, theme, fonts, buttons, panels, text input
   editor.cpp                       code editor
   course_screen.cpp                lesson list
   lesson_screen.cpp                theory | editor + console | AI tutor
 lessons/      *.lesson files
-tests/        engine unit tests
+tests/        engine unit tests; fixtures/ = real ProgramState snapshots for the visualizer
+              (regenerate: ./build/make_fixtures tests/fixtures)
 assets/fonts/ DejaVu fonts (free license, see LICENSE-DejaVu.txt)
 ```
 
@@ -102,6 +107,35 @@ Text. Lines indented by 4 spaces are shown as code.
 ```
 
 `./build/tests` verifies that every lesson's solution passes its tests and the starter code does not.
+
+## Lesson steps
+
+A topic goes **Explore → Understand → Practice**. Steps are optional sections after the
+lesson-level task; `lessons/05_pointers.lesson` uses every kind.
+
+```
+@step explore     @scene pointer_basics           @text ...
+@step watch       @code ...  [@input ...]         @text ...
+@step predict     @code ...  @line 6  @expr x     @text What is x after line 6?
+                  (no @expr: predict the program's output)
+@step find_bug    @starter ...  @solution ...  @test ...   @text ...
+@step modify      same fields as find_bug
+@step explain     @rubric copy; address; caller's variables   @answer ...   @text ...
+@step practice    (the lesson-level task)
+```
+
+The right answer to a Predict step is never typed by the author: `check_prediction` runs the
+code under the debugger and reads the real value. For pointers the student can answer with the
+target (`&y` or `y`). `./build/tests` checks every step of every lesson.
+
+## Debugger
+
+`debug_start`, `debug_next`, `debug_step`, `debug_finish`, `debug_run_to_line`, `debug_state`
+drive GDB through its machine interface. The program is built with `-g -O0` and a small heap
+tracker (`malloc`/`free` wrapped with `-Wl,--wrap`), so every snapshot has frames, variables
+(arrays and struct fields as children, pointers with their targets), heap blocks (live or freed,
+with contents) and the output so far. Crashes (segfault on line N), leaks at exit and lines that
+never finish (infinite loops) are reported in `ProgramState`. Requires `gdb`.
 
 ## Workflow
 

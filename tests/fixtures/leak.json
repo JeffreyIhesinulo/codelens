@@ -1,0 +1,23 @@
+{
+  "errors": [
+    {
+      "details": "40 bytes never freed",
+      "kind": "memory-leak",
+      "line": 0
+    }
+  ],
+  "exit_code": 0,
+  "finished": true,
+  "heap": [
+    {
+      "address": "0x55555555a2a0",
+      "cells": [],
+      "freed": false,
+      "size": 40
+    }
+  ],
+  "line": 0,
+  "note": "The program finished but one heap block was never freed.",
+  "output": "",
+  "stack": []
+}
