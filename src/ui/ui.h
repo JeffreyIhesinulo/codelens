@@ -44,6 +44,7 @@ void fonts_unload();
 // ---------------------------------------------------------------- text helpers
 float text_width(const Font& f, float size, const std::string& s);
 void  draw_text(const Font& f, float size, const std::string& s, float x, float y, Color c);
+std::string fit_text(const Font& f, float size, const std::string& s, float width);
 // Word wrap. Keeps explicit newlines. Lines are UTF-8.
 std::vector<std::string> wrap_text(const Font& f, float size, const std::string& s, float width);
 // Draws wrapped text, returns the height used.
@@ -58,6 +59,8 @@ void ui_cursor_ibeam();
 
 enum class ButtonStyle { Normal, Primary, Ghost };
 bool button(Rectangle r, const std::string& label, bool enabled = true, ButtonStyle style = ButtonStyle::Normal);
+bool slider(Rectangle r, const std::string& label, int& value, int min, int max);
+int action_buttons(Rectangle r, const std::vector<std::string>& labels, int selected = -1);  // clicked index, or -1
 
 void panel(Rectangle r, const std::string& title = "");   // title drawn in a header strip
 Rectangle panel_body(Rectangle r, bool has_title);        // inner area under the header
@@ -71,6 +74,14 @@ struct TextInput {
     bool focused = false;
 };
 bool text_input(Rectangle r, TextInput& in, const std::string& placeholder);
+
+struct TextArea {
+    std::string text;
+    size_t cursor = 0;  // UTF-8 byte offset
+    float scroll = 0;
+    bool focused = false;
+};
+bool text_area(Rectangle r, TextArea& in, const std::string& placeholder = "");  // true on edit
 
 // Which widget owns the keyboard: the code editor or a text input.
 enum class Focus { None, Editor, Input };

@@ -1,5 +1,6 @@
 // CodeLens — entry point.
 #include "screens.h"
+#include "memview_preview.h"
 
 #include <sys/stat.h>
 
@@ -19,21 +20,27 @@ static std::string find_root() {
 #endif
 }
 
-int main() {
+int main(int argc, char** argv) {
+    const bool memory_preview = argc > 1 && std::string(argv[1]) == "--memory-preview";
+    const std::string root = find_root();
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+    InitWindow(1366, 800, memory_preview ? "CodeLens · Memory visualizer" : "CodeLens");
+    SetWindowMinSize(1100, 640);
+    SetTargetFPS(60);
+    if (!fonts_load(root + "/assets")) TraceLog(LOG_WARNING, "CodeLens: fonts not found in %s/assets", root.c_str());
+    if (memory_preview) {
+        run_memory_preview(root);
+        fonts_unload();
+        CloseWindow();
+        return 0;
+    }
+
     App app;
-    app.root = find_root();
+    app.root = root;
     app.lessons = lessons_load(app.root + "/lessons");
     app.progress = progress_load(app.progress_path());
     ai_init();
-
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(1366, 800, "CodeLens");
-    SetWindowMinSize(1100, 640);
-    SetTargetFPS(60);
     SetExitKey(KEY_NULL);   // Esc is used for "back"
-
-    if (!fonts_load(app.root + "/assets")) TraceLog(LOG_WARNING, "CodeLens: fonts not found in %s/assets", app.root.c_str());
-
     while (!WindowShouldClose()) {
         ui_begin_frame();
         BeginDrawing();
