@@ -46,6 +46,10 @@ cmake --build build -j
 
 Engine and tests only (no raylib): `cmake -B build -DBUILD_APP=OFF`.
 
+Run `./build/codelens --memory-preview` to inspect the seven memory snapshots in
+`tests/fixtures`. Select a snapshot at the top, hover over a variable or heap block
+to see its address, and use the slider in **Array** to change the pointer target.
+
 Shortcuts: `Ctrl+R` run, `Ctrl+Enter` check, `Esc` back to lessons, `Shift+wheel` horizontal scroll.
 
 ## Project structure
