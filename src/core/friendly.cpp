@@ -51,17 +51,19 @@ std::string format_for_type(const std::string& t) {
 }
 
 // Explains one diagnostic. Returns false for messages a beginner does not need to see.
-bool explain(const std::string& kind, const std::string& msg, int line, FriendlyError& out) {
+// at_line_start: gcc's column points at the first token of the line (so a missing ';' belongs
+// to the line before), rather than at the end of the line that lacks it.
+bool explain(const std::string& kind, const std::string& msg, int line, bool at_line_start, FriendlyError& out) {
     std::smatch m;
     out.line = line;
     out.warning = kind == "warning";
-    std::string prev = line > 1 ? "line " + std::to_string(line - 1) : "the line before";
 
     // ---- errors
     if (std::regex_search(msg, std::regex(R"(expected (?:',' or )?';'(?: or ',')? before)"))) {
-        out.message = "A semicolon (;) is missing, most likely at the end of " + prev + ".";
+        int at = at_line_start && line > 1 ? line - 1 : line;
+        out.message = "A semicolon (;) is missing at the end of line " + std::to_string(at) + ".";
         out.hint = "In C every statement ends with a semicolon, for example: int x = 5;";
-        if (line > 1) out.line = line - 1;
+        out.line = at;
         return true;
     }
     if (std::regex_search(msg, m, std::regex(R"('(\w+)' undeclared)"))) {
@@ -199,7 +201,9 @@ bool explain(const std::string& kind, const std::string& msg, int line, Friendly
 
 std::vector<FriendlyError> explain_compile_errors(const std::string& output) {
     std::vector<FriendlyError> errors, warnings;
-    static const std::regex diag(R"((?:^|\n)[^\n]*?\.(?:c|cpp|cc):(\d+):(?:\d+:)? (fatal error|error|warning): ([^\n]*))");
+    static const std::regex diag(R"((?:^|\n)[^\n]*?\.(?:c|cpp|cc):(\d+):(?:(\d+):)? (fatal error|error|warning): ([^\n]*))");
+    // gcc prints the source line under a diagnostic: "    5 |     printf(...)"
+    static const std::regex snippet(R"(^\n?\s*\d+ \| ([^\n]*))");
     static const std::regex linker(R"(undefined reference to `\w+')");
 
     auto add = [&](const FriendlyError& e) {
@@ -209,15 +213,24 @@ std::vector<FriendlyError> explain_compile_errors(const std::string& output) {
         list.push_back(e);
     };
     for (std::sregex_iterator it(output.begin(), output.end(), diag), end; it != end; ++it) {
-        std::string msg = (*it)[3];
+        std::string msg = (*it)[4];
         size_t opt = msg.rfind(" [-W");                 // drop " [-Wformat=]"
         if (opt != std::string::npos) msg.erase(opt);
+        int col = (*it)[2].matched ? std::stoi((*it)[2]) : 0;
+        bool at_line_start = false;
+        std::smatch sm;
+        std::string rest = output.substr((size_t)(it->position() + it->length()));
+        if (col > 0 && std::regex_search(rest, sm, snippet)) {
+            std::string src = sm[1];
+            size_t first = src.find_first_not_of(" \t");
+            at_line_start = first != std::string::npos && (size_t)col <= first + 1;
+        }
         FriendlyError e;
-        if (explain((*it)[2] == "warning" ? "warning" : "error", msg, std::stoi((*it)[1]), e)) add(e);
+        if (explain((*it)[3] == "warning" ? "warning" : "error", msg, std::stoi((*it)[1]), at_line_start, e)) add(e);
     }
     for (std::sregex_iterator it(output.begin(), output.end(), linker), end; it != end; ++it) {
         FriendlyError e;
-        if (explain("error", it->str(), 0, e)) add(e);
+        if (explain("error", it->str(), 0, false, e)) add(e);
     }
     errors.insert(errors.end(), warnings.begin(), warnings.end());
     return errors;

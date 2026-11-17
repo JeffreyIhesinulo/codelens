@@ -645,7 +645,9 @@ static bool has_message(const RunResult& r, const std::string& part, int line = 
 TEST(test_friendly_errors) {
     RunResult r = run_code("#include <stdio.h>\nint main(void) {\n    int x = 5\n    printf(\"%d\", x);\n    return 0;\n}\n", "", Lang::C);
     CHECK(!r.compiled);
-    CHECK(has_message(r, "semicolon (;) is missing, most likely at the end of line 3", 3));
+    CHECK(has_message(r, "semicolon (;) is missing at the end of line 3", 3));   // gcc points at line 4's first token
+    RunResult r2 = run_code("#include <stdio.h>\nint main(void) {\n    int n = 1;\n    printf(\"%d\\n\", n)\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r2, "semicolon (;) is missing at the end of line 4", 4));  // gcc points at the end of line 4
     CHECK(!r.friendly.empty() && !r.friendly[0].hint.empty());
 
     r = run_code("int main(void) {\n    y = 5;\n    return 0;\n}\n", "", Lang::C);
