@@ -73,6 +73,24 @@ guided lesson screen.
 
 Newest first. When the plan changes, add an entry here and update `docs/`.
 
+### 2026-11-17 (engine) — week-1 `app.h` additions landed
+The interfaces promised in v3 are now real (branch `dzheffriei`, PR to `main`). Replace any
+placeholders in `src/ui` with them:
+- `ShowLevel` (`Values/Frames/Addresses/Heap`) on `Lesson::show` and every `Step::show`.
+- `StepKind::Order` (`Step::lines`, `order_shuffled`, `check_order`) and `StepKind::Choose`
+  (`Step::options`, `Step::correct`, `check_choice` → `Verdict`; `sample_answer` = explanation).
+- `Step::edit_from/edit_to`: locked lines in the editor (see the comment in `app.h`).
+- `RunResult::friendly` (`FriendlyError{line, warning, message, hint}`): show these first, raw
+  compiler output behind "Show details". `explain_compile_errors(output)` if you need it directly.
+- `glossary_lookup(token)` for tooltips (`printf`, `int`, `;`, `&`, `*`, `%d`, ...).
+- `ProgramState::note` is now a plain-English sentence after every `debug_next/step/finish`
+  ("Line 6: x changed from 3 to 10."). Show it under the visualizer.
+- A variable value `"?"` means "declared but has no value yet": draw it as an empty box.
+  Variables whose declaration has not run yet are no longer in the snapshot.
+- `Scene::code` added (scenes themselves arrive in week 2).
+- `lessons/05_pointers.lesson` now has every step kind, including `choose`, `order` and an
+  `@editable` practice step: use it to build the guided lesson screen.
+
 ### 2026-11-17 (update) — screen checklist
 Dzheffriei reviewed the `--memory-preview` window as if he were a beginner: lots of empty space,
 unexplained words (Array, Stack, Heap, Snapshot), a slider with no instruction, a Notes box with no

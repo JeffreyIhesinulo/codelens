@@ -60,9 +60,9 @@ Read [PLAN.md](PLAN.md) first: the app is for people who have **never programmed
 - Fixes from the test, report, demo video, journal.
 
 ## Done checklist
-- [ ] Step narration with tests (swap, array, heap, crash, printf)
-- [ ] `@show`, `@editable`, `order`, `choose` in the lesson format
-- [ ] Friendly errors table + `glossary_lookup`
+- [x] Step narration with tests (swap, array, heap, crash, printf)
+- [x] `@show`, `@editable`, `order`, `choose` in the lesson format
+- [x] Friendly errors table + `glossary_lookup`
 - [ ] Scene engine + `variables`, `condition`, `array`, `pointer_basics` (+ `heap`, `recursion`)
 - [ ] Explanation grading (keywords + AI)
 - [ ] Lessons 1–7 (8–9 if time), every step checked by `./build/tests`

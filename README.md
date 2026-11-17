@@ -70,6 +70,9 @@ src/core/     engine — no raylib (Jeffrey)
   debugger.cpp  step-by-step execution through GDB/MI, stack + heap snapshots, check_prediction
   mi.cpp        parser for GDB/MI output
   state.cpp     ProgramState <-> JSON, address lookup ("p points at x")
+  narrate.cpp   one plain-English sentence per debugger step
+  friendly.cpp  beginner-friendly compiler errors, glossary
+  steps.cpp     checking Order and Choose steps
   scenes.cpp    Explore scenes (planned for week 3)
 src/ui/       raylib interface (Igor)
   main.cpp, ui.h, widgets.cpp     window, theme, fonts, buttons, panels, text input
@@ -131,7 +134,10 @@ lesson-level task; `lessons/05_pointers.lesson` uses every kind.
 @step find_bug    @starter ...  @solution ...  @test ...   @text ...
 @step modify      same fields as find_bug
 @step explain     @rubric copy; address; caller's variables   @answer ...   @text ...
-@step practice    (the lesson-level task)
+@step practice    (the lesson-level task)   [@editable 4-4: only these starter lines can be edited]
+@step order       @code ... (the student puts its lines in order)   @text ...
+@step choose      @option ... @option ...  @correct 2  @answer (why)  @text ...
+@show values|frames|addresses|heap   (lesson default or per step: how much memory to show)
 ```
 
 The right answer to a Predict step is never typed by the author: `check_prediction` runs the
@@ -146,6 +152,14 @@ tracker (`malloc`/`free` wrapped with `-Wl,--wrap`), so every snapshot has frame
 (arrays and struct fields as children, pointers with their targets), heap blocks (live or freed,
 with contents) and the output so far. Crashes (segfault on line N), leaks at exit and lines that
 never finish (infinite loops) are reported in `ProgramState`. Requires `gdb`.
+
+After every step `ProgramState.note` holds one plain-English sentence ("Line 5: checked i < 3:
+true, so the loop body runs."). Variables appear only once their declaration has run, and a value
+of `?` means "declared but not given a value yet".
+
+Compiler errors are translated for beginners in `RunResult.friendly` (missing `;`, undeclared
+name, missing `#include`, `scanf` without `&`, `=` in a condition, ...), and `glossary_lookup`
+explains words and symbols for tooltips.
 
 ## Workflow
 

@@ -189,9 +189,11 @@ RunResult run_code(const std::string& code, const std::string& stdin_text, Lang 
     if (!comp.started || comp.exit_code != 0) {
         if (comp.exit_code == 127) res.compile_errors = "Compiler not found. Install gcc/g++.";
         res.error_lines = parse_error_lines(res.compile_errors, file);
+        res.friendly = explain_compile_errors(res.compile_errors);
         res.compiled = false;
     } else {
         res.compiled = true;
+        res.friendly = explain_compile_errors(res.compile_errors);   // warnings beginners need
         ExecResult run = exec_capture({bin}, stdin_text, timeout_ms,
             {"ASAN_OPTIONS=detect_leaks=1:abort_on_error=0:symbolize=1",
              "UBSAN_OPTIONS=print_stacktrace=1"});

@@ -60,8 +60,7 @@ struct Step { StepKind kind; std::string title, text, code, input, starter, solu
 // Lesson::steps holds every step in order; a lesson without @step has one Practice step.
 ```
 
-**Proposed, arriving with Dzheffriei's week-1 PR** (code against these names; until the PR lands,
-use local placeholders — do not edit `app.h` yourself):
+**Added in Dzheffriei's week-1 PR (17 Nov)** — now in `app.h`:
 
 ```cpp
 enum class ShowLevel { Values, Frames, Addresses, Heap };   // Lesson::show, Step::show
@@ -71,8 +70,11 @@ enum class ShowLevel { Values, Frames, Addresses, Heap };   // Lesson::show, Ste
 //   std::vector<std::string> options;   // Choose: answers
 //   int correct = -1;                   // Choose: index of the right option
 //   int edit_from = 0, edit_to = 0;     // Modify/FindBug/Practice: editable lines (1-based), 0 = all
+//   (first edit_from-1 and last (lines - edit_to) lines locked; the middle may grow or shrink)
 std::vector<int> order_shuffled(const Step& s);                    // a shuffled start order
 bool check_order(const Step& s, const std::vector<int>& order);
+Verdict check_choice(const Step& s, int index);                    // Choose steps
+// ProgramState::note: one sentence after every debugger step; a value "?" = no value yet
 struct FriendlyError { int line; std::string message, hint; };
 // RunResult gains std::vector<FriendlyError> friendly;  (show these instead of raw compiler text)
 std::string glossary_lookup(const std::string& token);             // "" if unknown
