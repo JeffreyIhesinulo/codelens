@@ -15,6 +15,9 @@ interface must always show what to do next.
 5. The editor gets **locked lines** (template greyed out, only marked lines editable).
 6. **Glossary tooltips** when hovering keywords in code.
 7. Every debugger step shows the engine's sentence (`ProgramState.note`) under the visualizer.
+8. **The local AI tutor is our main feature** (added later on 17 Nov): an "Ask the tutor" button on
+   every screen, a **Why?** button next to every step sentence, an **AI setup screen** with model
+   download, and a **More practice** button. See PLAN.md, section D.
 
 Your existing work (`memview.cpp`, `slider`, `action_buttons`, `text_area`, `--memory-preview`)
 is kept and reused: the visualizer is the centre of Explore and Understand.
@@ -81,6 +84,18 @@ std::string glossary_lookup(const std::string& token);             // "" if unkn
 // Scene gains std::string code; scene_state(...).line = line to highlight
 ```
 
+**Planned AI calls** (Dzheffriei, weeks 2–4; names may still change in his PR):
+
+```cpp
+int  ai_ask(const AiContext& ctx, const std::string& question);   // any step; ctx built by the engine
+int  ai_why(const AiContext& ctx);                                // explain the last step sentence
+bool ai_poll(int request_id, std::string& answer);               // already exists
+struct AiStatus { bool server_running; bool model_installed; std::string model; };
+AiStatus ai_status();
+bool ai_pull_model(float& progress /* 0..1 */);                  // download in the background
+int  ai_generate_task(const Lesson& lesson);                      // "More practice", verified by the engine
+```
+
 ## Tasks
 
 ### Week 1 (16–20 Nov)
@@ -116,6 +131,8 @@ std::string glossary_lookup(const std::string& token);             // "" if unkn
   editable; the cursor cannot enter them.
 - **Friendly errors** in the console: the `FriendlyError` sentence first, raw compiler text behind a
   "Show details" toggle.
+- **Ask the tutor** button on every step screen (opens a slide-in chat; until `ai_ask` lands use
+  `ai_chat`) and a **Why?** button next to the step sentence in Watch and Predict.
 
 ### Week 3 (30 Nov – 4 Dec)
 - **Explore step** (generic for every scene): sliders for `scene.params`, `action_buttons` for
@@ -127,12 +144,17 @@ std::string glossary_lookup(const std::string& token);             // "" if unkn
 - **Course map as a path**: topics top-to-bottom, three small stage indicators each, the next topic
   highlighted, a big **Continue** button.
 - **Lesson notes drawer** in Practice: the lesson's Explore/Understand texts, reachable at any time.
+- **AI setup screen**: shown when `ai_status()` says the server or the model is missing. Plain steps
+  ("1. Install Ollama from ollama.com 2. Press Download model"), a Download button with a progress
+  bar (`ai_pull_model`), and "Continue without AI". Reachable later from the course screen.
 
 ### Week 4 (7–11 Dec)
 - **Glossary tooltips**: hovering a token in code (editor and read-only views) shows
   `glossary_lookup(token)` in a small card.
 - **AI tutor**: in Explore/Understand an "Ask the tutor" button opens a slide-in panel; in Practice
   it stays a panel.
+- **More practice** button after a passed Practice step: shows "Writing a new task…" while
+  `ai_generate_task` runs, then opens the new task as a Practice step.
 - **Animations**: a changed value flashes, a new frame slides in, a pointer arrow moves smoothly.
 - **Beginner test** together with Dzheffriei; polish the UI from what you see.
 
@@ -150,3 +172,4 @@ std::string glossary_lookup(const std::string& token);             // "" if unkn
 - [ ] Explore (generic), Modify/FindBug with Debug, Explain
 - [ ] Course map path + Continue; lesson notes drawer
 - [ ] Glossary tooltips; AI tutor button; animations
+- [ ] Ask the tutor + Why? on every step; AI setup screen with model download; More practice

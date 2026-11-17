@@ -11,6 +11,9 @@ Read [PLAN.md](PLAN.md) first: the app is for people who have **never programmed
 5. Explore scenes start with the **first topics** (`variables`, `condition`), not only pointers.
 6. Two new topics (**Variables**, **Functions**); lessons 1–3 are rewritten for beginners.
 7. A **beginner test** session in week 4.
+8. **The local AI tutor is the main feature** (17 Nov, later the same day): every AI request is
+   grounded in engine facts, the AI appears in every stage, AI-generated tasks are verified by the
+   compiler, and the model choice is backed by a quality check. See PLAN.md, section D.
 
 ## Tasks
 
@@ -44,15 +47,29 @@ Read [PLAN.md](PLAN.md) first: the app is for people who have **never programmed
 - Lessons **1–3 rewritten** for beginners: 1 What a program is + output, 2 Variables, 3 Conditions.
   Mostly watch / choose / order / edit-one-line; Practice last.
 
+- **AI grounded in engine facts**: one context builder used by every AI call — lesson goal, current
+  step, code with line numbers, the step sentence, a short text form of the memory state, friendly
+  errors and the test difference. New calls: `ai_ask(context, question)` for any step and
+  `ai_why(context)` to explain the last step sentence. Prompts in `prompts/*.txt`.
+
 ### Week 3 (30 Nov – 4 Dec)
 - **Grading explanations**: keywords from `@rubric` first (works offline), AI adds feedback and a
   follow-up question; returns `Verdict`.
 - Scenes **`array`** (size, values, index, out of bounds) and **`pointer_basics`**
   (`p = &a`, `p = &b`, `*p = 5`, `p = NULL`, `*p` with NULL → error).
 - Lessons **4–7**: Loops, Functions (new), Arrays, Pointers.
+- **AI status and model download**: `ai_status()` (server running? model installed?) and
+  `ai_pull_model()` with progress through Ollama's `/api/pull`, for Ihor's setup screen.
+- **AI review** after a passed Practice step; **Predict feedback**: after a wrong answer the AI
+  explains the misunderstanding using the real value.
 
 ### Week 4 (7–11 Dec)
 - Scene **`heap`** (+ **`recursion`** if time); lessons **8–9** if time.
+- **More practice**: `ai_generate_task(lesson)` → a Practice step (task, starter, reference solution,
+  tests). The engine compiles the reference and runs the tests; only a task that passes is shown
+  (up to 3 attempts).
+- **AI quality check**: `tests/ai_eval/` with 20–30 beginner mistakes and what a good answer must
+  mention; a small tool scores each model and prompt. Compare 3B vs 7B; put the table in the report.
 - **Beginner test** with Ihor: 15 minutes with someone who never programmed; write down where they
   get stuck.
 
@@ -66,4 +83,8 @@ Read [PLAN.md](PLAN.md) first: the app is for people who have **never programmed
 - [ ] Scene engine + `variables`, `condition`, `array`, `pointer_basics` (+ `heap`, `recursion`)
 - [ ] Explanation grading (keywords + AI)
 - [ ] Lessons 1–7 (8–9 if time), every step checked by `./build/tests`
+- [ ] Every AI call grounded in engine facts; `ai_ask`, `ai_why`
+- [ ] `ai_status`, `ai_pull_model`; AI review; Predict feedback
+- [ ] AI-generated practice tasks verified by the compiler
+- [ ] AI quality check (models and prompts compared, table in the report)
 - [ ] Beginner test notes in the report

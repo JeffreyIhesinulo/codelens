@@ -8,7 +8,8 @@ for the person you work for: [docs/plan-ihor.md](docs/plan-ihor.md) (UI) or
 
 CodeLens: a desktop app (C++17 + raylib) that teaches C to **people who have never programmed**.
 Each topic goes Explore (interactive memory picture) → Understand (watch code run line by line,
-predict, fix a bug, explain) → Practice (write code that passes tests, with an AI tutor).
+predict, fix a bug, explain) → Practice (write code that passes tests). A **local AI tutor**
+(Ollama, offline, private) is the main feature and is available on every screen.
 
 ## Ownership — do not cross it
 
@@ -72,6 +73,17 @@ guided lesson screen.
 ## Plan change log
 
 Newest first. When the plan changes, add an entry here and update `docs/`.
+
+### 2026-11-17 (AI) — the local AI tutor is the main feature
+The team decided the local AI (Ollama, runs on the student's computer, offline, free, private) is
+the project's main feature and must be visible in every stage, not only as a chat in Practice.
+- Every AI request is grounded in engine facts (step sentence, memory state, friendly error, test
+  difference, lesson goal); the AI explains, it never guesses what the program did.
+- UI: "Ask the tutor" on every screen, **Why?** next to every step sentence, an **AI setup screen**
+  with model download, **More practice** after a passed task.
+- Engine: `ai_ask`, `ai_why`, `ai_status`, `ai_pull_model`, `ai_generate_task` (tasks verified by
+  the compiler before they are shown), and an AI quality check across models and prompts.
+- Details: docs/PLAN.md section D; tasks per week in docs/plan-ihor.md and docs/plan-jeffrey.md.
 
 ### 2026-11-17 (engine) — week-1 `app.h` additions landed
 The interfaces promised in v3 are now real (branch `dzheffriei`, PR to `main`). Replace any

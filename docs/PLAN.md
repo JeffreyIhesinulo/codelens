@@ -71,6 +71,26 @@ screen; no Explore scenes; no beginner features below.
 6. **AI tutor** is a button ("Ask the tutor") in early steps and a panel in Practice.
 7. **Glossary tooltips**: hover `printf`, `int`, `;`, `&`, `*` in code to see one-line explanations.
 
+### D. The local AI tutor — our main feature
+The AI runs **on the student's own computer** (Ollama): no internet, no API key, no cost, and the
+student's code never leaves the machine — it can be installed in any school lab.
+
+How it stays reliable on a small model: the **engine supplies the facts** (step sentence, memory
+snapshot, friendly error, test difference, lesson goal) and the **AI turns them into a
+conversation**. The AI never has to guess what the program did.
+
+Where the student meets it:
+- **Explore**: "Ask about this picture" — the question goes with the scene and memory state.
+- **Understand**: a **Why?** button next to every step sentence; after a wrong Predict the AI explains
+  the misunderstanding; the AI grades Explain answers and asks one follow-up question.
+- **Practice**: 3-level hints, explaining errors, a review after passing, and **More practice**: the AI
+  writes a similar task with tests, and the engine compiles its reference solution and runs the tests
+  before the student ever sees it.
+- **AI setup screen**: detects Ollama and the model, explains how to install them, and can download
+  the model from inside the app with a progress bar.
+- **AI quality check**: 20–30 typical beginner mistakes used to compare models (3B vs 7B) and prompts;
+  the results go in the report.
+
 ### C. Topics (in order)
 
 | # | Topic | Explore scene | Notes |
@@ -89,10 +109,10 @@ screen; no Explore scenes; no beginner features below.
 
 | Week | Dzheffriei (engine, content) | Ihor (UI) |
 |---|---|---|
-| 1 · 16–20 Nov | ✅ debugger, steps, fixtures · step narration · `@show` · friendly errors · `order`/`choose`/editable lines in the lesson format | ✅ visualizer, widgets · `@show` levels in `draw_memory` · welcome screen · guided lesson screen skeleton on the pointers lesson + fixtures |
-| 2 · 23–27 Nov | scene engine (generic) + `variables`, `condition` scenes · lessons 1–3 rewritten for beginners | Watch/Predict wired to the live debugger with narration · `order` and `choose` UIs · locked template in the editor |
-| 3 · 30 Nov–4 Dec | grading explanations (keywords + AI) · `array`, `pointer_basics` scenes · lessons 4–7 | Explore screen (generic) · Modify/FindBug/Explain UIs · course map path + Continue · lesson notes drawer |
-| 4 · 7–11 Dec | `heap` (+ `recursion`) scenes · lessons 8–9 if time · **beginner test (both)** | glossary tooltips · animations · AI tutor button/panel · polish |
+| 1 · 16–20 Nov | ✅ debugger, steps, fixtures · ✅ step narration · ✅ `@show` · ✅ friendly errors + glossary · ✅ `order`/`choose`/editable lines | ✅ visualizer, widgets · `@show` levels in `draw_memory` · welcome screen · guided lesson screen skeleton on the pointers lesson + fixtures |
+| 2 · 23–27 Nov | scene engine (generic) + `variables`, `condition` scenes · lessons 1–3 rewritten for beginners · AI context from engine facts (`ai_ask`, `ai_why`) | Watch/Predict wired to the live debugger with narration · `order` and `choose` UIs · locked template in the editor · Ask the tutor + Why? buttons |
+| 3 · 30 Nov–4 Dec | grading explanations (keywords + AI) · `array`, `pointer_basics` scenes · lessons 4–7 · AI status + model download · AI review | Explore screen (generic) · Modify/FindBug/Explain UIs · course map path + Continue · lesson notes drawer · AI setup screen |
+| 4 · 7–11 Dec | `heap` (+ `recursion`) scenes · lessons 8–9 if time · AI-generated tasks verified by the compiler · AI quality check · **beginner test (both)** | glossary tooltips · animations · More practice button · polish |
 | 5 · 14–18 Dec | fixes from the beginner test · report · demo video · journals | fixes · presentation · demo video · journals |
 
 ## Rules
