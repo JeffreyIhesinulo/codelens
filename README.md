@@ -8,6 +8,12 @@ gives hints without revealing the solution, and answers questions about the code
 Every program is built with AddressSanitizer and UBSan, so memory bugs are reported
 with the exact line instead of silently producing garbage.
 
+## Plan and contributor docs
+
+- [docs/PLAN.md](docs/PLAN.md) — current plan (v3), status and timeline
+- [docs/plan-jeffrey.md](docs/plan-jeffrey.md), [docs/plan-ihor.md](docs/plan-ihor.md) — tasks per person
+- [AGENTS.md](AGENTS.md) — rules for AI coding agents and the plan change log
+
 ## Features (MVP)
 
 - Course screen with progress
