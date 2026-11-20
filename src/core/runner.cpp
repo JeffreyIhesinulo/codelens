@@ -1,6 +1,8 @@
 // Compiles and runs student code in a child process with a time limit.
 #include "app.h"
 #include "internal.h"
+#include "mac_memory.h"
+#include <filesystem>
 
 #include <algorithm>
 #include <cerrno>
@@ -110,7 +112,7 @@ static std::vector<int> parse_error_lines(const std::string& compiler_out, const
 
 // First stack frame that points into the student's file: "... main.c:12"
 static int first_line_in(const std::string& text, size_t from, const std::string& file) {
-    std::regex re("/" + file + R"(:(\d+))");
+    std::regex re(file + R"(:(\d+))");
     std::smatch m;
     std::string rest = text.substr(from);
     if (std::regex_search(rest, m, re)) return std::stoi(m[1]);
@@ -170,7 +172,17 @@ RunResult run_code(const std::string& code, const std::string& stdin_text, Lang 
     std::string dir = tmpl;
     std::string file = lang == Lang::C ? "main.c" : "main.cpp";
     std::string src = dir + "/" + file, bin = dir + "/program";
+#ifdef __APPLE__
+    { std::ofstream(src) << mac_memory::declarations << "\n#line 1 \"" << file << "\"\n" << code; }
+    { std::string tracker_source = mac_memory::tracker;
+      auto at = tracker_source.find("\"cl_heap.txt\"");
+      tracker_source.replace(at, 13, "\"" + dir + "/cl_heap.txt\"");
+      std::ofstream(dir + "/tracker.c") << tracker_source; }
+    auto tracker = exec_capture({"clang", "-g", "-O0", "-c", dir + "/tracker.c", "-o", dir + "/tracker.o"}, "", 20000);
+    if (tracker.exit_code != 0) { res.compile_errors = tracker.err; return res; }
+#else
     { std::ofstream(src) << code; }
+#endif
 
     std::vector<std::string> cc = lang == Lang::C
         ? std::vector<std::string>{"gcc", "-std=c11"}
@@ -179,6 +191,9 @@ RunResult run_code(const std::string& code, const std::string& stdin_text, Lang 
                           "-fno-omit-frame-pointer", "-fdiagnostics-color=never"})
         cc.push_back(f);
     cc.push_back(src);
+#ifdef __APPLE__
+    cc.push_back(dir + "/tracker.o");
+#endif
     cc.push_back("-o");
     cc.push_back(bin);
     if (lang == Lang::C) cc.push_back("-lm");
@@ -189,11 +204,17 @@ RunResult run_code(const std::string& code, const std::string& stdin_text, Lang 
     if (!comp.started || comp.exit_code != 0) {
         if (comp.exit_code == 127) res.compile_errors = "Compiler not found. Install gcc/g++.";
         res.error_lines = parse_error_lines(res.compile_errors, file);
+        res.friendly = explain_compile_errors(res.compile_errors);
         res.compiled = false;
     } else {
         res.compiled = true;
+        res.friendly = explain_compile_errors(res.compile_errors);   // warnings beginners need
         ExecResult run = exec_capture({bin}, stdin_text, timeout_ms,
+#ifdef __APPLE__
+            {"ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:symbolize=1",
+#else
             {"ASAN_OPTIONS=detect_leaks=1:abort_on_error=0:symbolize=1",
+#endif
              "UBSAN_OPTIONS=print_stacktrace=1"});
         res.output      = run.out;
         res.stderr_text = run.err;
@@ -202,10 +223,16 @@ RunResult run_code(const std::string& code, const std::string& stdin_text, Lang 
         res.timed_out = run.timed_out;
         res.crashed   = run.signal != 0 && !run.timed_out;
         res.memory_errors = parse_sanitizers(run.err, file);
+#ifdef __APPLE__
+        if (!res.crashed && !res.timed_out && res.memory_errors.empty()) {
+            std::ifstream heap(dir + "/cl_heap.txt"); std::string address; size_t bytes; int freed, line;
+            while (heap >> address >> bytes >> freed >> line)
+                if (!freed) res.memory_errors.push_back({"memory-leak", line, std::to_string(bytes) + " bytes allocated but never freed"});
+        }
+#endif
     }
 
-    unlink(src.c_str());
-    unlink(bin.c_str());
-    rmdir(dir.c_str());
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(dir, cleanup_error);
     return res;
 }

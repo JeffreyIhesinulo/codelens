@@ -15,6 +15,10 @@
 //   @step find_bug   @starter  @solution  @test...    @text
 //   @step explain    [@code]  @rubric (ideas; separated by ';')  @answer (model answer)  @text
 //   @step practice   uses the lesson-level task unless it has its own sections
+//   @step order      @code (the correct program; the student puts its lines in order)  @text
+//   @step choose     @option ... (2 or more)  @correct N (1-based)  [@code]  @answer (why)  @text
+// Any step: @show values|frames|addresses|heap (default: the lesson's @show, else values).
+// Modify / FindBug / Practice: @editable A-B = only lines A..B of the starter can be edited.
 // A lesson without "@step practice" but with lesson-level tests gets a Practice step at the end.
 // Inside a step, @input before any @test is the program's stdin.
 #include "app.h"
@@ -55,13 +59,38 @@ const char* step_kind_name(StepKind k) {
         case StepKind::FindBug:  return "find_bug";
         case StepKind::Explain:  return "explain";
         case StepKind::Practice: return "practice";
+        case StepKind::Order:    return "order";
+        case StepKind::Choose:   return "choose";
     }
     return "?";
 }
 
+const char* show_level_name(ShowLevel l) {
+    switch (l) {
+        case ShowLevel::Values:    return "values";
+        case ShowLevel::Frames:    return "frames";
+        case ShowLevel::Addresses: return "addresses";
+        case ShowLevel::Heap:      return "heap";
+    }
+    return "?";
+}
+
+static bool parse_show(const std::string& s, ShowLevel& out) {
+    for (ShowLevel l : {ShowLevel::Values, ShowLevel::Frames, ShowLevel::Addresses, ShowLevel::Heap})
+        if (s == show_level_name(l)) { out = l; return true; }
+    return false;
+}
+
+static int count_lines(const std::string& code) {
+    int n = 0;
+    for (char c : code) n += c == '\n';
+    return n;
+}
+
 static bool parse_kind(const std::string& s, StepKind& k) {
     for (StepKind c : {StepKind::Explore, StepKind::Watch, StepKind::Predict, StepKind::Modify,
-                       StepKind::FindBug, StepKind::Explain, StepKind::Practice})
+                       StepKind::FindBug, StepKind::Explain, StepKind::Practice, StepKind::Order,
+                       StepKind::Choose})
         if (s == step_kind_name(c)) { k = c; return true; }
     return false;
 }
@@ -78,10 +107,24 @@ static std::string validate(const Step& s) {
         case StepKind::Modify:
         case StepKind::FindBug:
             if (s.starter.empty()) return "needs @starter";
-            return s.tests.empty() ? "needs at least one @test" : "";
+            if (s.tests.empty()) return "needs at least one @test";
+            break;
         case StepKind::Practice:
-            return s.tests.empty() ? "needs at least one @test" : "";
+            if (s.tests.empty()) return "needs at least one @test";
+            break;
+        case StepKind::Order:
+            return s.lines.size() < 2 ? "needs @code with at least 2 non-empty lines" : "";
+        case StepKind::Choose:
+            if (s.text.empty()) return "needs @text (the question)";
+            if (s.options.size() < 2) return "needs at least 2 @option lines";
+            if (s.correct < 0 || s.correct >= (int)s.options.size()) return "@correct must be 1.." + std::to_string(s.options.size());
+            return "";
         case StepKind::Explain:  return s.text.empty() ? "needs @text (the question)" : "";
+    }
+    if (s.edit_from || s.edit_to) {
+        int n = count_lines(s.starter);
+        if (s.edit_from < 1 || s.edit_to < s.edit_from || s.edit_to > n)
+            return "@editable must be a range inside the starter code (1-" + std::to_string(n) + ")";
     }
     return "";
 }
@@ -94,6 +137,7 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
     int step = -1;                 // index into out.steps, -1 = lesson level
     int test = -1;                 // index of the current test in the current scope
     bool has_practice_step = false;
+    std::vector<bool> show_set;    // per step: had its own @show
 
     auto tests = [&]() -> std::vector<TestCase>& { return step < 0 ? out.tests : out.steps[step].tests; };
     auto fail = [&](const std::string& msg) { error = "line " + std::to_string(line_no) + ": " + msg; return false; };
@@ -148,6 +192,7 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
             if (!parse_kind(value, s.kind)) return fail("unknown step kind \"" + value + "\"");
             has_practice_step |= s.kind == StepKind::Practice;
             out.steps.push_back(s);
+            show_set.push_back(false);
             step = (int)out.steps.size() - 1;
             test = -1;
         }
@@ -158,6 +203,24 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
             if (value == "c") out.lang = Lang::C;
             else if (value == "cpp" || value == "c++") out.lang = Lang::CPP;
             else return fail("unknown @lang " + value);
+        }
+        else if (key == "show") {
+            ShowLevel lvl;
+            if (!parse_show(value, lvl)) return fail("@show must be values, frames, addresses or heap");
+            if (step < 0) out.show = lvl;
+            else { out.steps[step].show = lvl; show_set[step] = true; }
+        }
+        else if (key == "option" && step >= 0) {
+            if (value.empty()) return fail("@option needs text");
+            out.steps[step].options.push_back(value);
+        }
+        else if (key == "correct" && step >= 0) out.steps[step].correct = std::atoi(value.c_str()) - 1;
+        else if (key == "editable") {
+            int a = 0, b = 0;
+            if (std::sscanf(value.c_str(), "%d-%d", &a, &b) != 2) return fail("@editable needs a range like 4-6");
+            if (step < 0) return fail("@editable must be inside a @step");
+            out.steps[step].edit_from = a;
+            out.steps[step].edit_to = b;
         }
         else if (key == "scene" && step >= 0) out.steps[step].scene = value;
         else if (key == "expr"  && step >= 0) out.steps[step].predict_expr = value;
@@ -182,6 +245,19 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
     if (out.id.empty())    { error = "missing @id"; return false; }
     if (out.title.empty()) { error = "missing @title"; return false; }
 
+    // Steps without their own @show use the lesson's.
+    for (size_t i = 0; i < out.steps.size(); ++i)
+        if (!show_set[i]) out.steps[i].show = out.show;
+    // Order steps: the correct program, one entry per non-empty line (indentation kept).
+    for (Step& s : out.steps) {
+        if (s.kind != StepKind::Order) continue;
+        std::istringstream code(s.code);
+        std::string l;
+        while (std::getline(code, l)) {
+            while (!l.empty() && (l.back() == ' ' || l.back() == '\r')) l.pop_back();
+            if (!trim(l).empty()) s.lines.push_back(l);
+        }
+    }
     // A practice step without its own content uses the lesson-level task, and vice versa.
     for (Step& s : out.steps) {
         if (s.kind != StepKind::Practice) continue;
@@ -197,6 +273,7 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
     if (!has_practice_step && !out.tests.empty()) {
         Step s;
         s.kind = StepKind::Practice;
+        s.show = out.show;
         s.title = "Practice";
         s.text = out.theory;
         s.starter = out.starter_code;

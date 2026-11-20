@@ -17,10 +17,19 @@ struct MemoryError {
     std::string details;   // one human-readable line
 };
 
+// A compiler error or warning explained for a beginner.
+struct FriendlyError {
+    int line = 0;              // line in the student's file, 0 if unknown
+    bool warning = false;      // true: the program still compiled
+    std::string message;       // "A semicolon (;) is missing at the end of line 4."
+    std::string hint;          // "Every statement ends with ;" ("" if none)
+};
+
 struct RunResult {
     bool compiled = false;
     std::string compile_errors;      // raw compiler output
     std::vector<int> error_lines;    // lines with compile errors (for highlighting)
+    std::vector<FriendlyError> friendly;   // show these first; raw text behind "Show details"
     std::string output;              // stdout
     std::string stderr_text;         // stderr (sanitizer reports etc.)
     int  exit_code = 0;
@@ -28,6 +37,13 @@ struct RunResult {
     bool crashed = false;            // killed by a signal (segfault, abort)
     std::vector<MemoryError> memory_errors;
 };
+
+// Translates gcc/g++ output into FriendlyErrors (errors first, then the warnings beginners need).
+std::vector<FriendlyError> explain_compile_errors(const std::string& compiler_output);
+
+// One-line explanation of a C/C++ word or symbol for glossary tooltips: "printf", "int", ";", "&".
+// "" if unknown.
+std::string glossary_lookup(const std::string& token);
 
 // Compiles with -g -O0 and AddressSanitizer/UBSan, runs with a time limit.
 RunResult run_code(const std::string& code, const std::string& stdin_text,
@@ -41,7 +57,15 @@ struct TestCase {
 };
 
 // One step of a lesson. A topic goes Explore -> Understand (Watch/Predict/Modify/FindBug/Explain) -> Practice.
-enum class StepKind { Explore, Watch, Predict, Modify, FindBug, Explain, Practice };
+enum class StepKind { Explore, Watch, Predict, Modify, FindBug, Explain, Practice, Order, Choose };
+
+// How much of memory the visualizer shows. A beginner starts with Values.
+//   Values:    one box per variable, "name = value"; no addresses, frames or heap
+//   Frames:    a group of boxes per function call
+//   Addresses: addresses and pointer arrows
+//   Heap:      the heap column
+enum class ShowLevel { Values, Frames, Addresses, Heap };
+const char* show_level_name(ShowLevel l);   // "values", "frames", ...
 
 struct Step {
     StepKind kind = StepKind::Practice;
@@ -55,8 +79,16 @@ struct Step {
     int predict_line = 0;       // Predict: "value of <expr> after line N runs"
     std::string predict_expr;   // Predict: "" = predict the program's output instead
     std::string rubric;         // Explain: key ideas, separated by ';'
-    std::string sample_answer;  // Explain: model answer shown after submitting
+    std::string sample_answer;  // Explain: model answer; Choose: explanation shown after answering
     std::vector<TestCase> tests;
+    ShowLevel show = ShowLevel::Values;   // from @show on the step, else the lesson's
+    std::vector<std::string> lines;       // Order: the program's lines in the correct order
+    std::vector<std::string> options;     // Choose: the answers
+    int correct = -1;                     // Choose: index of the right option
+    // Modify/FindBug/Practice: editable lines of the starter (1-based, inclusive); 0 = all editable.
+    // The first edit_from-1 lines and the last (starter lines - edit_to) lines are locked; the
+    // editable part in between may grow or shrink while the student types.
+    int edit_from = 0, edit_to = 0;
 };
 
 const char* step_kind_name(StepKind k);   // "explore", "watch", ...
@@ -73,6 +105,7 @@ struct Lesson {
     std::vector<TestCase> tests;
     // All steps in order. A lesson without @step sections has one Practice step.
     std::vector<Step> steps;
+    ShowLevel show = ShowLevel::Values;   // default for the steps
 };
 
 std::vector<Lesson> lessons_load(const std::string& dir);   // sorted by id
@@ -151,6 +184,7 @@ void debug_stop();
 struct SceneParam { std::string name; int min = 0, max = 0, value = 0; };
 struct Scene {
     std::string id, title;
+    std::string code;                    // the program the picture matches; scene_state().line = line to highlight
     std::vector<SceneParam> params;      // sliders
     std::vector<std::string> actions;    // buttons, e.g. "p = &a", "free(p)"
 };
@@ -165,6 +199,20 @@ struct Verdict {
 };
 // The right answer is computed by running step.code, never typed by the lesson author.
 Verdict check_prediction(const Step& step, Lang lang, const std::string& answer);
+
+// Order steps: a shuffled start order (indexes into step.lines, never already correct, same every time)
+std::vector<int> order_shuffled(const Step& step);
+// true if putting step.lines in this order gives the correct program (identical lines are interchangeable)
+bool check_order(const Step& step, const std::vector<int>& order);
+// Choose steps: index = the option the student picked
+Verdict check_choice(const Step& step, int index);
+
+// One plain-English sentence about what running `line` did, comparing two snapshots
+// ("Line 6: x changed from 3 to 10."). With the source code it also explains conditions,
+// loops and return. The debugger fills ProgramState.note with it after every step.
+// A value shown as "?" means "declared but not given a value yet".
+std::string describe_step(const ProgramState& before, const ProgramState& after, int line,
+                          const std::string& code = "");
 
 // ---------------------------------------------------------------- Progress
 struct Progress {

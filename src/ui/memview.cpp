@@ -26,15 +26,18 @@ struct Box {
     bool freed = false;
     bool error = false;
     bool in_array = false;
+    bool flashing = false;
+    std::string animation_key = "";
 };
 
 struct Column {
     Rectangle view;
     std::vector<Box> boxes;
     float y = 0;
+    bool arrows = true;
 
     Rectangle row() const {
-        return {view.x, y, view.width - arrow_space, row_height};
+        return {view.x, y, view.width - (arrows ? arrow_space : 0), row_height};
     }
 };
 
@@ -44,14 +47,24 @@ std::string hex_address(uint64_t address) {
     return text;
 }
 
+std::string display_value(const Variable& var, const ProgramState& state, ui::ShowLevel level) {
+    if (var.value == "?") return "";
+    if (!var.is_pointer) return var.value;
+    if (!var.points_to) return level >= ui::ShowLevel::Addresses ? "NULL" : "no target";
+    std::string target = state_describe_address(state, var.points_to);
+    if (target.empty() || (level < ui::ShowLevel::Heap && target.rfind("heap block ", 0) == 0)) return "points to another box";
+    return "points to " + target;
+}
+
 bool array_elements(const std::vector<Variable>& children) {
     return !children.empty() && !children.front().name.empty() && children.front().name.front() == '[';
 }
 
-void add_variable(std::vector<Box>& boxes, const Variable& var, Rectangle r, bool cell = false);
+void add_variable(std::vector<Box>& boxes, const Variable& var, Rectangle r,
+                  const ProgramState& state, ui::ShowLevel level, bool cell = false);
 
 float add_children(std::vector<Box>& boxes, const std::vector<Variable>& children,
-                   Rectangle r, bool array) {
+                   Rectangle r, bool array, const ProgramState& state, ui::ShowLevel level) {
     const int columns = array ? std::max(1, (int)((r.width + gap) / 62)) : 1;
     const float width = (r.width - (columns - 1) * gap) / columns;
     float row_bottom = r.y;
@@ -60,18 +73,19 @@ float add_children(std::vector<Box>& boxes, const std::vector<Variable>& childre
         if (i > 0 && col == 0) r.y = row_bottom + gap;
         Rectangle child = {r.x + col * (width + gap), r.y, width, row_height};
         size_t index = boxes.size();
-        add_variable(boxes, children[i], child, array);
+        add_variable(boxes, children[i], child, state, level, array);
         row_bottom = std::max(row_bottom, r.y + boxes[index].rect.height);
     }
     return row_bottom;
 }
 
-void add_variable(std::vector<Box>& boxes, const Variable& var, Rectangle r, bool cell) {
+void add_variable(std::vector<Box>& boxes, const Variable& var, Rectangle r,
+                  const ProgramState& state, ui::ShowLevel level, bool cell) {
     const bool aggregate = !var.children.empty();
     const bool array = array_elements(var.children);
-    const std::string value = var.is_pointer ? (var.points_to ? hex_address(var.points_to) : "NULL") : var.value;
+    const std::string value = display_value(var, state, level);
     std::string label = var.name;
-    if (!cell || aggregate) label += ": " + var.type;
+    if (level >= ui::ShowLevel::Addresses && (!cell || aggregate)) label += ": " + var.type;
     if (!aggregate) label += " = " + value;
     BoxKind kind = BoxKind::Variable;
     if (aggregate) kind = array ? BoxKind::Array : BoxKind::Structure;
@@ -90,11 +104,12 @@ void add_variable(std::vector<Box>& boxes, const Variable& var, Rectangle r, boo
     if (!expanded) return;
 
     Rectangle inner = {r.x + pad, r.y + r.height, r.width - 2 * pad, 0};
-    float bottom = add_children(boxes, var.children, inner, array);
+    float bottom = add_children(boxes, var.children, inner, array, state, level);
     boxes[index].rect.height = bottom + pad - r.y;
 }
 
-void add_frame(Column& column, const Frame& frame, bool current, bool error) {
+void add_frame(Column& column, const Frame& frame, bool current, bool error,
+               const ProgramState& state, ui::ShowLevel level) {
     Rectangle r = column.row();
     std::string label = frame.function + "()";
     if (frame.line > 0) label += "   ·   line " + std::to_string(frame.line);
@@ -102,16 +117,17 @@ void add_frame(Column& column, const Frame& frame, bool current, bool error) {
     const size_t index = column.boxes.size();
     Box box{r, label, BoxKind::Frame};
     box.error = error;
+    box.animation_key = frame.function + ":" + std::to_string(frame.vars.empty() ? 0 : frame.vars.front().address);
     column.boxes.push_back(box);
     if (!frame.vars.empty()) {
         Rectangle inner = {r.x + pad, r.y + r.height + 2, r.width - 2 * pad, 0};
-        float bottom = add_children(column.boxes, frame.vars, inner, false);
+        float bottom = add_children(column.boxes, frame.vars, inner, false, state, level);
         column.boxes[index].rect.height = bottom + pad - r.y;
     }
     column.y += column.boxes[index].rect.height + 12;
 }
 
-void add_block(Column& column, const HeapBlock& block, size_t number, bool error) {
+void add_block(Column& column, const HeapBlock& block, size_t number, bool error, const ProgramState& state) {
     Rectangle r = column.row();
     std::string label = "Block " + std::to_string(number) + "   ·   " + std::to_string(block.size) + " B";
     if (block.freed) label += "   ·   freed";
@@ -124,7 +140,8 @@ void add_block(Column& column, const HeapBlock& block, size_t number, bool error
     column.boxes.push_back(box);
     if (!block.freed && !block.cells.empty()) {
         Rectangle inner = {r.x + pad, r.y + r.height + 2, r.width - 2 * pad, 0};
-        float bottom = add_children(column.boxes, block.cells, inner, array_elements(block.cells));
+        float bottom = add_children(column.boxes, block.cells, inner, array_elements(block.cells),
+                                    state, ui::ShowLevel::Heap);
         column.boxes[index].rect.height = bottom + pad - r.y;
     }
     column.y += column.boxes[index].rect.height + 12;
@@ -138,6 +155,7 @@ void draw_box(const Box& box) {
     Color fill = (group || aggregate) ? theme::panel_hi : theme::bg;
     if (box.error) fill = theme::error_bg;
     Color border = box.error ? theme::danger : theme::border;
+    if (box.flashing) { fill = theme::accent_dk; border = theme::accent; }
     Color ink = box.freed ? theme::text_dim : (box.pointer ? theme::accent : theme::text);
 
     DrawRectangleRounded(r, 0.18f, 6, fill);
@@ -164,6 +182,8 @@ void clip(Rectangle area) {
 }
 
 void draw_column(Column& column, float& offset, const std::string& empty) {
+    struct Animation { std::string label; double born = 0, changed = -10, seen = 0; };
+    static std::map<std::string, Animation> animations;
     Rectangle view = column.view;
     float content = std::max(0.0f, column.y - gap);
     scroll_area(view, content, offset);
@@ -172,7 +192,23 @@ void draw_column(Column& column, float& offset, const std::string& empty) {
         draw_text(g_fonts.ui, font_size, empty, view.x, view.y + 6, theme::text_dim);
     for (Box& box : column.boxes) {
         box.rect.y += view.y - offset;
+        std::string key = !box.animation_key.empty() ? box.animation_key : std::to_string((int)box.kind) + ":" + std::to_string(box.address) + ":" +
+                          box.label.substr(0, box.label.find(" = "));
+        double now = GetTime();
+        auto found = animations.find(key);
+        if (found == animations.end() || now - found->second.seen > .5)
+            animations[key] = {box.label, now, -10, now};
+        auto& animation = animations[key];
+        if (animation.label != box.label) { animation.changed = now; animation.label = box.label; }
+        animation.seen = now;
+        box.flashing = now - animation.changed < .65;
+        box.rect.x += 22 * std::max(0.0, 1 - (now - animation.born) / .22);
         if (CheckCollisionRecs(box.rect, view)) draw_box(box);
+    }
+    if (animations.size() > 800) {
+        for (auto it = animations.begin(); it != animations.end();) {
+            if (GetTime() - it->second.seen > 2) it = animations.erase(it); else ++it;
+        }
     }
     EndScissorMode();
 }
@@ -235,6 +271,18 @@ bool visible_in(Vector2 point, const Column& column, const Column& other) {
 
 void draw_pointers(const Column& column, const Column& stack, const Column& heap,
                    const std::map<uint64_t, const Box*>& targets) {
+    struct MovingTarget { Vector2 point; double seen; };
+    static std::map<uint64_t, MovingTarget> moving;
+    auto smooth = [&](uint64_t address, Vector2 end) {
+        auto [it, inserted] = moving.emplace(address, MovingTarget{end, GetTime()});
+        auto& target = it->second;
+        if (inserted || GetTime() - target.seen > .5) target.point = end;
+        float blend = std::min(1.0f, GetFrameTime() * 14);
+        target.point.x += (end.x - target.point.x) * blend;
+        target.point.y += (end.y - target.point.y) * blend;
+        target.seen = GetTime();
+        return target.point;
+    };
     for (const Box& box : column.boxes) {
         if (!box.pointer) continue;
         Vector2 start = anchor(box.rect, true);
@@ -254,6 +302,7 @@ void draw_pointers(const Column& column, const Column& stack, const Column& heap
             // Enter a cell from below so the arrow doesn't cross its neighbors.
             start = {box.rect.x + box.rect.width / 2, box.rect.y};
             Vector2 end = {target->rect.x + target->rect.width / 2, target->rect.y + target->rect.height};
+            end = smooth(box.address, end);
             if (!visible_in(end, stack, heap)) continue;
             float bend = (start.y - end.y) * 0.55f;
             draw_arrow(start, {start.x, start.y - bend}, {end.x, end.y + bend}, end, color);
@@ -261,6 +310,7 @@ void draw_pointers(const Column& column, const Column& stack, const Column& heap
         }
         if (to_left) start = anchor(box.rect, false);
         Vector2 end = anchor(target->rect, !to_right, true);
+        end = smooth(box.address, end);
         if (!visible_in(end, stack, heap)) continue;
         const bool cross = to_right || to_left;
         float bend = cross ? std::clamp(std::abs(end.x - start.x) * 0.55f, 10.0f, 90.0f) : 42;
@@ -292,14 +342,20 @@ void draw_address(const Column& column) {
 }
 }
 
-void draw_memory(const ProgramState& state, Rectangle area) {
-    if (area.width < 320 || area.height < 120) return;
+void draw_memory(const ProgramState& state, Rectangle area, ui::ShowLevel level) {
+    if (area.width < 160 || area.height < 120) return;
     static float stack_scroll = 0, heap_scroll = 0;
+    const bool frames = level >= ui::ShowLevel::Frames;
+    const bool addresses = level >= ui::ShowLevel::Addresses;
+    const bool has_stack = !state.stack.empty();
+    const bool has_heap = level == ui::ShowLevel::Heap && !state.heap.empty();
+    const bool show_errors = addresses && !state.errors.empty();
     const float gutter = 14;
-    const float stack_width = std::floor((area.width - gutter) * 0.55f);
+    const float stack_width = has_stack && has_heap ? std::floor((area.width - gutter) * 0.55f) : area.width;
     Rectangle stack_panel = {area.x, area.y, stack_width, area.height};
     Rectangle heap_panel = {area.x + stack_width + gutter, area.y, area.width - stack_width - gutter, area.height};
-    if (!state.errors.empty()) {
+    if (!has_stack) heap_panel = area;
+    if (show_errors) {
         stack_panel.height -= 36;
         heap_panel.height -= 36;
         const MemoryError& error = state.errors.front();
@@ -312,9 +368,14 @@ void draw_memory(const ProgramState& state, Rectangle area) {
         draw_text(g_fonts.ui, font_size, fit_text(g_fonts.ui, font_size, text, warning.width - 20),
                   warning.x + 10, warning.y + 5, theme::danger);
     }
-    panel(stack_panel, "Stack");
-    panel(heap_panel, "Heap");
-    Column stack{panel_body(stack_panel, true), {}}, heap{panel_body(heap_panel, true), {}};
+    if (has_stack) panel(stack_panel);
+    if (has_heap) panel(heap_panel, "Heap");
+    Column stack{panel_body(stack_panel, false), {}}, heap{panel_body(heap_panel, true), {}};
+    stack.arrows = addresses;
+    if (!has_heap && stack.view.width > 560) {
+        stack.view.x += (stack.view.width - 560) / 2;
+        stack.view.width = 560;
+    }
     for (size_t i = state.stack.size(); i > 0; --i) {
         const Frame& frame = state.stack[i - 1];
         const bool current = i == state.stack.size();
@@ -322,29 +383,38 @@ void draw_memory(const ProgramState& state, Rectangle area) {
                      std::any_of(state.errors.begin(), state.errors.end(), [&](const MemoryError& e) {
                          return e.line == frame.line;
                      });
-        add_frame(stack, frame, current, error);
+        if (frames) add_frame(stack, frame, current, error, state, level);
+        else {
+            Rectangle r = stack.row();
+            if (!frame.vars.empty())
+                stack.y = add_children(stack.boxes, frame.vars, r, false, state, level) + 12;
+        }
     }
     const bool leak = std::any_of(state.errors.begin(), state.errors.end(), [](const MemoryError& e) {
         return e.kind == "memory-leak";
     });
-    for (size_t i = 0; i < state.heap.size(); ++i)
-        add_block(heap, state.heap[i], i + 1, leak && state.finished && !state.heap[i].freed);
+    if (has_heap)
+        for (size_t i = 0; i < state.heap.size(); ++i)
+            add_block(heap, state.heap[i], i + 1, leak && state.finished && !state.heap[i].freed, state);
 
-    // A short stack rests at the bottom. A tall stack starts at the top and scrolls.
-    float stack_shift = std::max(0.0f, stack.view.height - stack.y);
+    // Centre short content. A tall stack starts at the top and scrolls.
+    float stack_shift = std::max(0.0f, (stack.view.height - stack.y) / 2);
     for (Box& box : stack.boxes) box.rect.y += stack_shift;
-    draw_column(stack, stack_scroll, "No stack frames");
-    draw_column(heap, heap_scroll, "No heap allocations");
+    if (has_stack) draw_column(stack, stack_scroll, "No values yet");
+    if (has_heap) draw_column(heap, heap_scroll, "");
+    if (!has_stack && !has_heap)
+        draw_text(g_fonts.ui, font_size, "No values to show yet.", area.x + 12,
+                  area.y + area.height / 2, theme::text_dim);
+    if (!addresses) return;
 
     std::map<uint64_t, const Box*> targets;
     index_addresses(stack, targets);
     index_addresses(heap, targets);
-    Rectangle view = {stack.view.x, stack.view.y,
-                      heap.view.x + heap.view.width - stack.view.x, stack.view.height};
+    Rectangle view = {area.x, stack.view.y, area.width, stack.view.height};
     clip(view);
     draw_pointers(stack, stack, heap, targets);
     draw_pointers(heap, stack, heap, targets);
     EndScissorMode();
     draw_address(stack);
-    draw_address(heap);
+    if (has_heap) draw_address(heap);
 }

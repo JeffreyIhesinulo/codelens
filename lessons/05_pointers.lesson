@@ -2,6 +2,7 @@
 @title  Pointers
 @topic  pointers
 @lang   c
+@show   addresses
 
 @theory
 A pointer stores the address of another variable.
@@ -155,6 +156,32 @@ int main(void) {
 @text
 What does this program print?
 
+@step choose
+@title  Pick the right line
+@code
+int x = 3, y = 7;
+int *p = &x;
+@text
+Which line makes p point at y instead of x?
+@option p = y;
+@option *p = y;
+@option p = &y;
+@option &p = y;
+@correct 3
+@answer
+&y is the address of y. Storing it in p makes p point at y. *p = y would copy 7 into x.
+
+@step order
+@title  Put swap in order
+@text
+Put the lines of swap in the right order so it exchanges the two values.
+@code
+void swap(int *a, int *b) {
+    int t = *a;
+    *a = *b;
+    *b = t;
+}
+
 @step find_bug
 @title  Find the bug
 @text
@@ -215,3 +242,5 @@ the copies does not change the caller's variables. Passing &x gives swap the add
 of x, so *a = ... writes to x itself.
 
 @step practice
+@title  Practice
+@editable 4-4

@@ -6,6 +6,9 @@
 #include "app.h"
 #include "internal.h"
 #include "mi.h"
+#ifdef __APPLE__
+#include "debugger_lldb.h"
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -13,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <poll.h>
 #include <regex>
 #include <signal.h>
@@ -20,6 +24,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifndef __APPLE__
 // Linked into every program run under the debugger. Records every malloc/free
 // made by the student's code (not by libc itself) in a global array GDB can read.
 static const char* TRACKER_SOURCE = R"(
@@ -61,8 +66,34 @@ __attribute__((destructor)) static void cl_done(void) {
 #endif
 )";
 
+// GDB Python command "cl-decls": prints "name line is_arg" for every variable visible in the
+// selected frame, so variables whose declaration has not run yet can be hidden.
+static const char* GDB_HELPER = R"(
+import gdb
+class ClDecls(gdb.Command):
+    def __init__(self):
+        super().__init__("cl-decls", gdb.COMMAND_USER)
+    def invoke(self, arg, from_tty):
+        try:
+            b = gdb.selected_frame().block()
+        except RuntimeError:
+            gdb.write("CLDECL\n")
+            return
+        out = []
+        while b is not None:
+            for s in b:
+                if s.is_variable or s.is_argument:
+                    out.append("%s %d %d" % (s.name, s.line, 1 if s.is_argument else 0))
+            if b.function is not None:
+                break
+            b = b.superblock
+        gdb.write("CLDECL " + ";".join(out) + "\n")
+ClDecls()
+)";
+
 static const int STEP_TIMEOUT_MS = 3000;
 static const int MAX_STEPS = 2000;
+#endif
 
 namespace {
 
@@ -72,6 +103,7 @@ uint64_t first_hex(const std::string& s) {
     return std::strtoull(s.c_str() + p, nullptr, 16);
 }
 
+#ifndef __APPLE__
 std::string read_file(const std::string& path) {
     std::ifstream f(path);
     std::stringstream ss; ss << f.rdbuf();
@@ -109,6 +141,11 @@ std::vector<std::string> split_aggregate(const std::string& v) {
     return parts;
 }
 
+#endif
+
+#ifdef __APPLE__
+using Session = LldbSession;
+#else
 class Session {
 public:
     ~Session() { stop(); }
@@ -118,6 +155,7 @@ public:
     bool run_to_line(int line);
     std::string eval(const std::string& expr, int frame = -1);   // "" on error
     std::string type_of(const std::string& expr, int frame);      // "int", "char [8]", "" on error
+    std::map<std::string, std::pair<int, bool>> declarations(int frame);   // name -> (line, is_argument)
     void stop();
     bool active() const { return pid_ > 0; }
     ProgramState state;
@@ -128,8 +166,15 @@ private:
     std::string buf_;
     int token_ = 1;
     int steps_ = 0;
+    bool have_decls_ = false;      // GDB has Python and loaded cl-decls
+    int leave_depth_ = 0;          // guards the "finish out of library code" loop
+    // Variables declared without a value ("int x;"): key "depth#function#name" -> the garbage
+    // they held when they appeared. Shown as "?" until the value changes.
+    std::map<std::string, std::string> uninit_;
+    std::string console_;          // text GDB printed (~ records) during the last command
     std::string dir_, file_;
     std::vector<std::string> lines_;   // the student's source, for small checks
+    std::string code_;
 
     static std::vector<std::string> split_code_lines(const std::string& code) {
         std::vector<std::string> out;
@@ -137,6 +182,23 @@ private:
         std::string l;
         while (std::getline(in, l)) out.push_back(l);
         return out;
+    }
+    // "int x;" or "int a[5];" on that line declares name without giving it a value
+    bool declared_without_value(int line, const std::string& name) const {
+        if (line <= 0 || line > (int)lines_.size()) return false;
+        const std::string& l = lines_[line - 1];
+        std::regex no_init("\\b" + name + "\\s*(\\[[^\\]]*\\])?\\s*[;,)]");
+        std::regex init("\\b" + name + "\\s*(\\[[^\\]]*\\])?\\s*=");
+        return std::regex_search(l, no_init) && !std::regex_search(l, init);
+    }
+    static std::string signature(const Variable& v) {
+        std::string s = v.value;
+        for (const Variable& c : v.children) s += "|" + signature(c);
+        return s;
+    }
+    static void mark_unknown(Variable& v) {
+        if (v.children.empty()) v.value = "?";
+        for (Variable& c : v.children) mark_unknown(c);
     }
     bool is_function_header(int line) const {
         if (line <= 0 || line > (int)lines_.size()) return false;
@@ -196,6 +258,7 @@ bool Session::wait_result(int token, MIRecord& out, int timeout_ms) {
     while (read_line(line, timeout_ms)) {
         MIRecord r;
         if (!mi_parse_line(line, r)) continue;
+        if (r.type == '~') console_ += r.stream;
         if (r.type == '^' && r.token == token) { out = r; return true; }
     }
     return false;
@@ -211,6 +274,7 @@ bool Session::wait_stopped(MIRecord& out, int timeout_ms) {
 }
 
 bool Session::command(const std::string& cmd, MIRecord* out) {
+    console_.clear();
     int t = send(cmd);
     if (t < 0) return false;
     MIRecord r;
@@ -226,6 +290,7 @@ bool Session::start(const std::string& code, Lang lang, const std::string& input
     signal(SIGPIPE, SIG_IGN);
     state = ProgramState{};
     steps_ = 0;
+    uninit_.clear();
 
     char tmpl[] = "/tmp/codelens-dbg-XXXXXX";
     if (!mkdtemp(tmpl)) { error = "Could not create a temporary directory"; return false; }
@@ -234,6 +299,9 @@ bool Session::start(const std::string& code, Lang lang, const std::string& input
     { std::ofstream(dir_ + "/" + file_) << code; }
     { std::ofstream(dir_ + "/cl_tracker.c") << TRACKER_SOURCE; }
     { std::ofstream(dir_ + "/stdin.txt") << input; }
+    { std::ofstream(dir_ + "/cl_helper.py") << GDB_HELPER; }
+    lines_ = split_code_lines(code);
+    code_ = code;
 
     std::vector<std::string> cc = lang == Lang::C
         ? std::vector<std::string>{"gcc", "-std=c11"} : std::vector<std::string>{"g++", "-std=c++17"};
@@ -283,15 +351,16 @@ bool Session::start(const std::string& code, Lang lang, const std::string& input
             return false;
         }
     }
+    // Optional: needs GDB built with Python (Ubuntu's is). Without it all variables are shown.
+    have_decls_ = command("-interpreter-exec console \"source cl_helper.py\"");
     MIRecord r;
     if (!command("-exec-run", &r)) { error = "Could not start the program"; stop(); return false; }
     MIRecord stopped;
     if (!wait_stopped(stopped, STEP_TIMEOUT_MS)) { error = "The program did not reach main"; stop(); return false; }
     handle_stop(stopped);
-    lines_ = split_code_lines(code);
     // Some compilers still stop on the "int main(void) {" line: move to the first statement.
     if (!state.finished && is_function_header(state.line)) exec("-exec-next");
-    state.note = "The program starts. Next line to run: " + std::to_string(state.line) + ".";
+    state.note = "The program is ready. Line " + std::to_string(state.line) + " runs next.";
     return true;
 }
 
@@ -313,7 +382,8 @@ void Session::stop() {
     to_gdb_ = from_gdb_ = -1;
     buf_.clear();
     if (!dir_.empty()) {
-        for (const char* f : {"/main.c", "/main.cpp", "/cl_tracker.c", "/program", "/stdin.txt", "/out.txt", "/cl_heap.txt"})
+        for (const char* f : {"/main.c", "/main.cpp", "/cl_tracker.c", "/program", "/stdin.txt", "/out.txt", "/cl_heap.txt",
+                              "/cl_helper.py"})
             unlink((dir_ + f).c_str());
         rmdir(dir_.c_str());
         dir_.clear();
@@ -329,6 +399,7 @@ bool Session::exec(const std::string& cmd) {
         state.note = "Stopped after " + std::to_string(MAX_STEPS) + " steps.";
         return false;
     }
+    ProgramState before = state;
     MIRecord r;
     if (!command(cmd, &r)) return false;
     MIRecord stopped;
@@ -342,13 +413,17 @@ bool Session::exec(const std::string& cmd) {
         return true;
     }
     handle_stop(stopped);
+    // Plain-English sentence about what the line did (crashes and the end set their own note).
+    if (!state.finished) state.note = describe_step(before, state, before.line, code_);
     return true;
 }
 
 bool Session::run_to_line(int line) {
     if (!active() || state.finished) return false;
     if (!command("-break-insert -t " + file_ + ":" + std::to_string(line))) return false;
-    return exec("-exec-continue");
+    bool ok = exec("-exec-continue");
+    if (ok && !state.finished) state.note = "Ran the program up to line " + std::to_string(line) + ".";
+    return ok;
 }
 
 void Session::handle_stop(const MIRecord& stop) {
@@ -402,9 +477,23 @@ void Session::handle_stop(const MIRecord& stop) {
         state.note = what + (state.line ? " on line " + std::to_string(state.line) + "." : ".");
         return;
     }
-    // Stopped outside the student's file (e.g. after main returned): run to the end.
+    // Stopped outside the student's file:
+    //  - "step" went into a library function (printf with debug info installed): finish it and
+    //    come back to the student's code;
+    //  - main has returned into the C library: run to the end.
     if (!is_user_file(file)) {
-        exec("-exec-continue");
+        MIRecord fr;
+        bool user_below = false;
+        if (command("-stack-list-frames", &fr))
+            if (const MIValue* st = fr.results.get("stack"))
+                for (const auto& kv : st->items) user_below |= is_user_file(kv.second.text("file"));
+        if (user_below && ++leave_depth_ < 20) {
+            MIRecord r, again;
+            if (command("-exec-finish", &r) && wait_stopped(again, STEP_TIMEOUT_MS)) handle_stop(again);
+        } else {
+            exec("-exec-continue");
+        }
+        leave_depth_ = 0;
         return;
     }
     refresh();
@@ -431,6 +520,25 @@ std::string Session::type_of(const std::string& expr, int frame) {
     std::string name = r.results.text("name");
     if (!name.empty()) command("-var-delete " + name);
     return type;
+}
+
+std::map<std::string, std::pair<int, bool>> Session::declarations(int frame) {
+    std::map<std::string, std::pair<int, bool>> out;
+    if (!have_decls_) return out;
+    if (!command("-stack-select-frame " + std::to_string(frame))) return out;
+    if (!command("-interpreter-exec console \"cl-decls\"")) return out;
+    size_t p = console_.find("CLDECL");
+    if (p == std::string::npos) return out;
+    std::string list = console_.substr(p + 6);
+    std::istringstream in(list);
+    std::string item;
+    while (std::getline(in, item, ';')) {
+        std::istringstream f(item);
+        std::string name; int line = 0, arg = 0;
+        if (f >> name >> line >> arg) out.emplace(name, std::make_pair(line, arg != 0));   // innermost block wins
+    }
+    command("-stack-select-frame 0");
+    return out;
 }
 
 Variable Session::read_variable(const MIValue& mv, int level) {
@@ -529,12 +637,45 @@ void Session::refresh() {
                 fr.line = std::atoi(f.text("line").c_str());
                 frames.emplace_back(std::atoi(f.text("level").c_str()), fr);
             }
-        for (auto& lf : frames) {
+        for (size_t idx = 0; idx < frames.size(); ++idx) {
+            auto& lf = frames[idx];
+            size_t depth = frames.size() - 1 - idx;   // 0 = main
+            const Frame* old = depth < state.stack.size() && state.stack[depth].function == lf.second.function
+                             ? &state.stack[depth] : nullptr;
+            auto was_visible = [&](const std::string& name) {
+                if (!old) return false;
+                for (const Variable& v : old->vars) if (v.name == name) return true;
+                return false;
+            };
+            std::map<std::string, std::pair<int, bool>> decls = declarations(lf.first);   // name -> (line, is_arg)
             MIRecord vr;
             if (command("-stack-list-variables --thread 1 --frame " + std::to_string(lf.first) + " --simple-values", &vr))
                 if (const MIValue* vars = vr.results.get("variables"))
-                    for (const auto& kv : vars->items) lf.second.vars.push_back(read_variable(kv.second, lf.first));
+                    for (const auto& kv : vars->items) {
+                        std::string name = kv.second.text("name");
+                        auto d = decls.find(name);
+                        bool is_arg = d != decls.end() && d->second.second;
+                        bool visible_before = was_visible(name);
+                        // Hide variables whose declaration line has not run yet: before it runs
+                        // they only hold leftover garbage, which confuses beginners. Once shown,
+                        // a variable stays (a for-loop's i is declared on the line we come back to).
+                        if (d != decls.end() && !is_arg && d->second.first >= lf.second.line && !visible_before) continue;
+                        Variable v = read_variable(kv.second, lf.first);
+
+                        std::string key = std::to_string(depth) + "#" + lf.second.function + "#" + name;
+                        if (!visible_before && !is_arg && d != decls.end() && declared_without_value(d->second.first, name))
+                            uninit_[key] = signature(v);
+                        auto u = uninit_.find(key);
+                        if (u != uninit_.end()) {
+                            if (u->second == signature(v)) mark_unknown(v);
+                            else uninit_.erase(u);   // it got a value
+                        }
+                        lf.second.vars.push_back(v);
+                    }
         }
+        // forget "no value yet" marks of frames that returned
+        for (auto it = uninit_.begin(); it != uninit_.end();)
+            it = (size_t)std::atoi(it->first.c_str()) >= frames.size() ? uninit_.erase(it) : std::next(it);
         for (auto it = frames.rbegin(); it != frames.rend(); ++it) s.stack.push_back(it->second);
         if (!frames.empty()) s.line = frames.front().second.line;
     }
@@ -555,9 +696,9 @@ void Session::refresh() {
     }
     state = s;
     fill_heap_cells();
-    if (state.line) state.note = "Next line to run: " + std::to_string(state.line) + ".";
 }
 
+#endif
 Session g_ui;   // the session the UI drives
 
 }  // namespace

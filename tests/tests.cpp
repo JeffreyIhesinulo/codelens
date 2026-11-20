@@ -188,6 +188,12 @@ TEST(test_all_lesson_steps_valid) {
                 CHECK(good.passed == good.total);
                 CHECK(bad.passed < bad.total);   // the starter really has a bug / missing change
             }
+            if (st.kind == StepKind::Order) {
+                std::vector<int> identity(st.lines.size());
+                for (size_t k = 0; k < identity.size(); ++k) identity[k] = (int)k;
+                CHECK(check_order(st, identity) && !check_order(st, order_shuffled(st)));
+            }
+            if (st.kind == StepKind::Choose) CHECK(check_choice(st, st.correct).correct);
             if (st.kind == StepKind::Watch) {
                 std::string err;
                 CHECK(debug_start(st.code, l.lang, st.input, err));
@@ -626,6 +632,211 @@ TEST(test_check_prediction) {
     CHECK(!out.correct && out.feedback.find("column 4") != std::string::npos);
 }
 
+// ---------------------------------------------------------------- v3: beginner features
+
+static bool has_message(const RunResult& r, const std::string& part, int line = -1) {
+    for (const FriendlyError& e : r.friendly)
+        if (e.message.find(part) != std::string::npos && (line < 0 || e.line == line)) return true;
+    std::printf("  missing friendly message \"%s\". Got:\n", part.c_str());
+    for (const FriendlyError& e : r.friendly) std::printf("    [%d] %s\n", e.line, e.message.c_str());
+    return false;
+}
+
+TEST(test_friendly_errors) {
+    RunResult r = run_code("#include <stdio.h>\nint main(void) {\n    int x = 5\n    printf(\"%d\", x);\n    return 0;\n}\n", "", Lang::C);
+    CHECK(!r.compiled);
+    CHECK(has_message(r, "semicolon (;) is missing at the end of line 3", 3));   // gcc points at line 4's first token
+    RunResult r2 = run_code("#include <stdio.h>\nint main(void) {\n    int n = 1;\n    printf(\"%d\\n\", n)\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r2, "semicolon (;) is missing at the end of line 4", 4));  // gcc points at the end of line 4
+    CHECK(!r.friendly.empty() && !r.friendly[0].hint.empty());
+
+    r = run_code("int main(void) {\n    y = 5;\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "Y is used on line 2 but it was never created", 2));
+
+    r = run_code("int main(void) {\n    printf(\"hi\");\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "#include <stdio.h>"));
+
+    r = run_code("#include <stdio.h>\nint main(void) {\n    printff(\"hi\");\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "Did you mean printf?"));
+
+    r = run_code("#include <stdio.h>\nint main(void) {\n    if (1) {\n        printf(\"hi\");\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "closing brace } is missing"));
+
+    r = run_code("#include <stdio.h>\nint main(void) {\n    int n;\n    scanf(\"%d\", n);\n    return 0;\n}\n", "1\n", Lang::C);
+    CHECK(has_message(r, "scanf needs the address", 4));
+
+    r = run_code("#include <stdio.h>\nint main(void) {\n    double d = 2.5;\n    printf(\"%d\\n\", d);\n    return 0;\n}\n", "", Lang::C);
+    CHECK(r.compiled);   // a warning: the program still runs
+    CHECK(has_message(r, "%d is for whole numbers (int) but the value is a double"));
+    CHECK(!r.friendly.empty() && r.friendly[0].warning && r.friendly[0].hint.find("%f") != std::string::npos);
+
+    r = run_code("#include <stdio.h>\nint main(void) {\n    int x = 1;\n    if (x = 5) printf(\"a\");\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "uses = inside a condition", 4));
+
+    r = run_code("#include <stdio.h>\nint main(void) {\n    printf(\"hi);\n    return 0;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "missing its closing quote", 3));
+
+    r = run_code("int main(void) {\n    int x = 1;\n    int x = 2;\n    return x;\n}\n", "", Lang::C);
+    CHECK(has_message(r, "x is created twice"));
+
+    r = run_code("#include <stdio.h>\nint mian(void) { return 0; }\n", "", Lang::C);
+    CHECK(has_message(r, "no main function"));
+
+    r = run_code("int main(void) {\n    int x = 5;\n    return 0;\n}\n", "", Lang::C);
+    CHECK(r.compiled && r.friendly.empty());   // "unused variable" is not shown to beginners
+}
+
+TEST(test_glossary) {
+    CHECK(glossary_lookup("printf").find("Prints") != std::string::npos);
+    CHECK(glossary_lookup("&").find("Address") != std::string::npos);
+    CHECK(!glossary_lookup(";").empty() && !glossary_lookup("NULL").empty() && !glossary_lookup("%d").empty());
+    CHECK(glossary_lookup("banana").empty());
+}
+
+TEST(test_lesson_v3_format) {
+    const char* text =
+        "@id 08_x\n@title X\n@show frames\n"
+        "@step watch\n@code\nint main(void){ return 0; }\n"
+        "@step watch\n@show heap\n@code\nint main(void){ return 0; }\n"
+        "@step choose\n@text\nWhich?\n@option a = 1;\n@option a == 1;\n@correct 1\n@answer\nBecause = assigns.\n"
+        "@step order\n@code\nint main(void) {\n    int x = 1;\n\n    return x;\n}\n"
+        "@step modify\n@starter\nline1\nline2\nline3\n@editable 2-2\n@test\n@expected\nok\n";
+    Lesson l; std::string err;
+    CHECK(lesson_parse(text, l, err));
+    if (!err.empty()) std::printf("  %s\n", err.c_str());
+    CHECK(l.show == ShowLevel::Frames && l.steps.size() == 5);
+    if (l.steps.size() == 5) {
+        CHECK(l.steps[0].show == ShowLevel::Frames);   // inherited
+        CHECK(l.steps[1].show == ShowLevel::Heap);     // own @show
+        CHECK(l.steps[2].kind == StepKind::Choose && l.steps[2].options.size() == 2 && l.steps[2].correct == 0);
+        CHECK(l.steps[3].lines.size() == 4 && l.steps[3].lines[1] == "    int x = 1;");   // blank line dropped
+        CHECK(l.steps[4].edit_from == 2 && l.steps[4].edit_to == 2);
+    }
+    Lesson bad;
+    CHECK(!lesson_parse("@id a\n@title A\n@show everything\n", bad, err));
+    CHECK(!lesson_parse("@id a\n@title A\n@step choose\n@text\nQ\n@option only one\n@correct 1\n", bad, err));
+    CHECK(!lesson_parse("@id a\n@title A\n@step choose\n@text\nQ\n@option a\n@option b\n@correct 3\n", bad, err));
+    CHECK(!lesson_parse("@id a\n@title A\n@step modify\n@starter\nx\n@editable 2-5\n@test\n@expected\n1\n", bad, err));
+    CHECK(err.find("@editable") != std::string::npos);
+    CHECK(!lesson_parse("@id a\n@title A\n@step order\n@code\nonly_one_line;\n", bad, err));
+}
+
+TEST(test_order_and_choose) {
+    Step s;
+    s.kind = StepKind::Order;
+    s.lines = {"int main(void) {", "    int t = 1;", "    return t;", "}"};
+    std::vector<int> start = order_shuffled(s);
+    CHECK(start.size() == 4 && !check_order(s, start));
+    CHECK(order_shuffled(s) == start);   // the same every time
+    CHECK(check_order(s, {0, 1, 2, 3}));
+    CHECK(!check_order(s, {0, 2, 1, 3}));
+    CHECK(!check_order(s, {0, 1, 1, 3}));   // not a permutation
+    CHECK(!check_order(s, {0, 1, 2}));
+
+    Step two;   // identical lines are interchangeable
+    two.lines = {"{", "}", "}"};
+    CHECK(check_order(two, {0, 2, 1}));
+
+    Step c;
+    c.kind = StepKind::Choose;
+    c.options = {"p = y;", "p = &y;"};
+    c.correct = 1;
+    c.sample_answer = "&y is the address of y.";
+    CHECK(check_choice(c, 1).correct);
+    Verdict v = check_choice(c, 0);
+    CHECK(!v.correct && v.expected == "p = &y;" && v.feedback.find("address") != std::string::npos);
+}
+
+// Runs a program step by step and returns every note.
+static std::vector<std::string> narrate(const char* code, const char* input, bool into) {
+    std::vector<std::string> notes;
+    std::string err;
+    if (!debug_start(code, Lang::C, input, err)) { std::printf("  start failed: %s\n", err.c_str()); return notes; }
+    notes.push_back(debug_state().note);
+    for (int i = 0; i < 60 && debug_active(); ++i) {
+        if (into) debug_step(); else debug_next();
+        notes.push_back(debug_state().note);
+    }
+    debug_stop();
+    return notes;
+}
+
+static bool said(const std::vector<std::string>& notes, const std::string& part) {
+    for (const std::string& n : notes) if (n.find(part) != std::string::npos) return true;
+    std::printf("  missing note \"%s\". Notes:\n", part.c_str());
+    for (const std::string& n : notes) std::printf("    %s\n", n.c_str());
+    return false;
+}
+
+TEST(test_step_narration) {
+    std::vector<std::string> n = narrate(
+        "#include <stdio.h>\n"
+        "void swap(int *a, int *b) {\n"
+        "    int t = *a;\n"
+        "    *a = *b;\n"
+        "    *b = t;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    int x = 3, y = 5;\n"
+        "    swap(&x, &y);\n"
+        "    printf(\"%d %d\\n\", x, y);\n"
+        "    return 0;\n"
+        "}\n", "", true);
+    CHECK(said(n, "Line 8: created x = 3; created y = 5."));
+    CHECK(said(n, "called swap(a = &x, b = &y); now inside swap"));
+    CHECK(said(n, "Line 4: x (in main) changed from 3 to 5."));
+    CHECK(said(n, "swap finished; back in main"));
+    CHECK(said(n, "printed \"5 3\""));
+    CHECK(said(n, "main returns 0, so the program ends"));
+
+    n = narrate(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    int sum = 0;\n"
+        "    for (int i = 0; i < 2; i++) {\n"
+        "        sum += i + 1;\n"
+        "    }\n"
+        "    int x;\n"
+        "    scanf(\"%d\", &x);\n"
+        "    if (x > 10) {\n"
+        "        printf(\"big\\n\");\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n", "4\n", false);
+    CHECK(said(n, "created i = 0; checked i < 2: true, so the loop body runs"));
+    CHECK(said(n, "i changed from 0 to 1"));                     // not "created i" again
+    CHECK(said(n, "checked i < 2: false, so the loop ends; i no longer exists"));
+    CHECK(said(n, "created x (no value yet)"));
+    CHECK(said(n, "x got the value 4"));                          // not "changed from <garbage>"
+    CHECK(said(n, "checked x > 10: false, so the if part is skipped"));
+
+    n = narrate(
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    int *p = malloc(2 * sizeof(int));\n"
+        "    p[1] = 7;\n"
+        "    free(p);\n"
+        "    p = NULL;\n"
+        "    return 0;\n"
+        "}\n", "", false);
+    CHECK(said(n, "reserved 8 bytes on the heap (block 1)"));
+    CHECK(said(n, "p[1] changed from"));
+    CHECK(said(n, "freed heap block 1"));
+    CHECK(said(n, "p is now NULL"));
+
+    n = narrate("#include <stddef.h>\nint main(void) {\n    int *p = NULL;\n    *p = 5;\n    return 0;\n}\n", "", false);
+    CHECK(said(n, "Segmentation fault"));
+}
+
+TEST(test_hidden_until_declared) {
+    std::string err;
+    CHECK(debug_start("int main(void) {\n    int a = 1;\n    int b = 2;\n    return a + b;\n}\n", Lang::C, "", err));
+    CHECK(debug_state().stack.size() == 1 && debug_state().stack[0].vars.empty());   // nothing ran yet
+    debug_next();
+    CHECK(debug_state().stack[0].vars.size() == 1 && debug_state().stack[0].vars[0].name == "a");
+    debug_stop();
+}
+
 int main() {
     RUN(test_hello);
     RUN(test_stdin);
@@ -655,6 +866,12 @@ int main() {
     RUN(test_check_prediction);
     RUN(test_all_lesson_steps_valid);
     RUN(test_fixtures_load);
+    RUN(test_friendly_errors);
+    RUN(test_glossary);
+    RUN(test_lesson_v3_format);
+    RUN(test_order_and_choose);
+    RUN(test_step_narration);
+    RUN(test_hidden_until_declared);
 
     std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed == 0 ? 0 : 1;

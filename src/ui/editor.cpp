@@ -1,4 +1,5 @@
 #include "editor.h"
+#include "app.h"
 
 #include <algorithm>
 #include <cctype>
@@ -41,6 +42,25 @@ void CodeEditor::set_text(const std::string& text) {
     row = col = 0;
     scroll_y = scroll_x = 0;
     error_lines.clear();
+    locked_prefix = locked_suffix = 0;
+}
+
+bool CodeEditor::editable(int line) const {
+    return !read_only && line >= locked_prefix && line < (int)lines.size() - locked_suffix;
+}
+
+void CodeEditor::lock_template(const std::string& starter, int from, int to) {
+    locked_prefix = locked_suffix = 0;
+    if (from <= 0 || to < from) return;
+    CodeEditor original;
+    original.set_text(starter);
+    if (to > (int)original.lines.size()) return;
+    locked_prefix = from - 1;
+    locked_suffix = (int)original.lines.size() - to;
+    if ((int)lines.size() < locked_prefix + locked_suffix + 1) lines = original.lines;
+    std::copy(original.lines.begin(), original.lines.begin() + locked_prefix, lines.begin());
+    std::copy(original.lines.end() - locked_suffix, original.lines.end(), lines.end() - locked_suffix);
+    clamp_cursor();
 }
 
 std::string CodeEditor::text() const {
@@ -66,11 +86,12 @@ void CodeEditor::touch() {
 }
 
 void CodeEditor::clamp_cursor() {
-    row = std::clamp(row, 0, (int)lines.size() - 1);
+    row = std::clamp(row, locked_prefix, (int)lines.size() - locked_suffix - 1);
     col = std::clamp(col, 0, (int)lines[row].size());
 }
 
 void CodeEditor::insert_char(char c) {
+    if (!editable(row)) return;
     std::string& l = lines[row];
     // typing '}' on a blank line removes one indent level
     if (c == '}' && l.find_first_not_of(' ') == std::string::npos && col >= TAB && col == (int)l.size()) {
@@ -83,6 +104,7 @@ void CodeEditor::insert_char(char c) {
 }
 
 void CodeEditor::insert_text(const std::string& s) {
+    if (!editable(row)) return;
     for (char c : s) {
         if (c == '\n') {
             std::string rest = lines[row].substr(col);
@@ -118,6 +140,7 @@ static int brace_balance(const std::vector<std::string>& lines) {
 }
 
 void CodeEditor::new_line() {
+    if (!editable(row)) return;
     std::string& l = lines[row];
     std::string indent = indent_of(lines, row);
     size_t own = l.find_first_not_of(' ');
@@ -153,6 +176,7 @@ void CodeEditor::new_line() {
 }
 
 void CodeEditor::backspace() {
+    if (!editable(row) || (col == 0 && row == locked_prefix)) return;
     if (col > 0) {
         std::string& l = lines[row];
         // in leading whitespace: remove back to the previous tab stop
@@ -170,8 +194,9 @@ void CodeEditor::backspace() {
 }
 
 void CodeEditor::del() {
+    if (!editable(row)) return;
     if (col < (int)lines[row].size()) lines[row].erase(col, 1);
-    else if (row + 1 < (int)lines.size()) {
+    else if (editable(row + 1)) {
         lines[row] += lines[row + 1];
         lines.erase(lines.begin() + row + 1);
     }
@@ -255,7 +280,7 @@ void CodeEditor::update_and_draw(Rectangle r) {
 
     // ---- mouse
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        if (hover) {
+        if (hover && !read_only) {
             g_focus = Focus::Editor;
             row = (int)((m.y - text_area.y + scroll_y) / line_h);
             clamp_cursor();
@@ -273,8 +298,9 @@ void CodeEditor::update_and_draw(Rectangle r) {
     }
 
     // ---- keyboard
-    if (g_focus == Focus::Editor) {
-        bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+    if (g_focus == Focus::Editor && !read_only) {
+        bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
+                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
         for (int cp = GetCharPressed(); cp > 0; cp = GetCharPressed())
             if (cp >= 32 && cp < 127 && !ctrl) { insert_char((char)cp); touch(); }
 
@@ -283,11 +309,11 @@ void CodeEditor::update_and_draw(Rectangle r) {
         if (key_pressed(KEY_DELETE))    { del(); touch(); }
         if (key_pressed(KEY_TAB))       { insert_text("\t"); touch(); }
         if (key_pressed(KEY_LEFT)) {
-            if (col > 0) --col; else if (row > 0) { --row; col = (int)lines[row].size(); }
+            if (col > 0) --col; else if (row > locked_prefix) { --row; col = (int)lines[row].size(); }
             touch();
         }
         if (key_pressed(KEY_RIGHT)) {
-            if (col < (int)lines[row].size()) ++col; else if (row + 1 < (int)lines.size()) { ++row; col = 0; }
+            if (col < (int)lines[row].size()) ++col; else if (editable(row + 1)) { ++row; col = 0; }
             touch();
         }
         if (key_pressed(KEY_UP))        { --row; clamp_cursor(); touch(); }
@@ -334,7 +360,9 @@ void CodeEditor::update_and_draw(Rectangle r) {
     for (int i = first; i <= last; ++i) {
         float y = text_area.y + i * line_h - scroll_y;
         bool is_err = error_lines.count(i + 1);
-        if (is_err)
+        if (i + 1 == highlighted_line)
+            DrawRectangleRec({r.x + gutter - 8, y, r.width - gutter + 8, line_h}, theme::accent_dk);
+        else if (is_err)
             DrawRectangle((int)(r.x + gutter - 8), (int)y, (int)(r.width - gutter + 8), (int)line_h, theme::error_bg);
         else if (i == row && g_focus == Focus::Editor)
             DrawRectangle((int)(r.x + gutter - 8), (int)y, (int)(r.width - gutter + 8), (int)line_h, theme::line_hi);
@@ -353,6 +381,7 @@ void CodeEditor::update_and_draw(Rectangle r) {
         std::vector<Color> colors(l.size(), theme::text);
         for (const Span& s : spans)
             for (int k = s.start; k < s.end && k < (int)l.size(); ++k) colors[k] = s.color;
+        if (!read_only && !editable(i)) std::fill(colors.begin(), colors.end(), theme::text_dim);
         int k = 0;
         while (k < (int)l.size()) {
             int e = k;
@@ -362,7 +391,7 @@ void CodeEditor::update_and_draw(Rectangle r) {
         }
     }
     // cursor
-    if (g_focus == Focus::Editor && std::fmod(GetTime() - last_input, 1.0) < 0.55) {
+    if (!read_only && g_focus == Focus::Editor && std::fmod(GetTime() - last_input, 1.0) < 0.55) {
         float cx = text_area.x + col * char_w - scroll_x;
         float cy = text_area.y + row * line_h - scroll_y;
         DrawRectangle((int)cx, (int)cy + 2, 2, (int)line_h - 4, theme::accent);
@@ -371,4 +400,33 @@ void CodeEditor::update_and_draw(Rectangle r) {
 
     if (hover) ui_cursor_ibeam();
     DrawRectangleLinesEx(r, 1, g_focus == Focus::Editor ? theme::accent_dk : theme::border);
+    if (hover && m.x >= text_area.x) {
+        int line = (int)((m.y - text_area.y + scroll_y) / line_h);
+        int at = (int)((m.x - text_area.x + scroll_x) / char_w);
+        if (line >= 0 && line < (int)lines.size() && at >= 0 && at < (int)lines[line].size()) {
+            const auto& source = lines[line];
+            auto word = [](char c) { return std::isalnum((unsigned char)c) || c == '_' || c == '#'; };
+            int begin = at, end = at + 1;
+            if (word(source[at])) {
+                while (begin > 0 && word(source[begin - 1])) --begin;
+                while (end < (int)source.size() && word(source[end])) ++end;
+            }
+            std::string token = source.substr(begin, end - begin);
+            std::string explanation = glossary_lookup(token);
+            for (int start = std::max(0, at - 1); start <= at; ++start) {
+                auto pair = source.substr(start, 2);
+                if (!glossary_lookup(pair).empty()) { token = pair; explanation = glossary_lookup(pair); break; }
+            }
+            if (!explanation.empty()) {
+                float width = std::min(345.0f, GetScreenWidth() - 32.0f);
+                float height = wrap_text(g_fonts.ui, 15, token + ": " + explanation, width - 24).size() * 20 + 20;
+                Rectangle tooltip{std::clamp(m.x + 14, 8.0f, GetScreenWidth() - width - 8),
+                                  std::clamp(m.y + 24, 8.0f, GetScreenHeight() - height - 8), width, height};
+                DrawRectangleRounded(tooltip, .08f, 6, theme::panel_hi);
+                DrawRectangleRoundedLinesEx(tooltip, .08f, 6, 1, theme::accent);
+                draw_wrapped(g_fonts.ui, 15, token + ": " + explanation,
+                             {tooltip.x + 12, tooltip.y + 10, width - 24, 0}, theme::text, 5);
+            }
+        }
+    }
 }
