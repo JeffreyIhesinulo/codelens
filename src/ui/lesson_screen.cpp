@@ -1,5 +1,6 @@
 // Lesson screen: theory | code editor + console | AI tutor.
 #include "screens.h"
+#include "services.h"
 
 #include <algorithm>
 #include <chrono>
@@ -34,9 +35,14 @@ static std::string first_lines(const std::string& s, int n) {
 
 void LessonScreen::open(App& app, int index) {
     lesson_index = index;
-    const Lesson& l = app.lessons[index];
-    std::string draft = read_file(app.draft_path(l));
+    task = app.lessons[index];
+    marks_lesson_complete = true;
+    draft_file = app.draft_path(task);
+    edit_from = edit_to = 0;
+    const Lesson& l = task;
+    std::string draft = read_file(draft_file);
     editor.set_text(draft.empty() ? l.starter_code : draft);
+    details.clear(); show_details = false;
     console.clear();
     console_scroll = theory_scroll = chat_scroll = 0;
     chat.clear();
@@ -52,10 +58,25 @@ void LessonScreen::open(App& app, int index) {
     print("Press Run to compile and run your program, or Check to run the tests.", theme::text_dim, false);
 }
 
+void LessonScreen::open_task(App& app, int index, const Step& step, int step_number) {
+    open(app, index);
+    marks_lesson_complete = step.kind == StepKind::Practice;
+    task.title = step.title.empty() ? task.title : step.title;
+    if (!step.text.empty()) task.theory = step.text + "\n\n" + app.lessons[index].theory;
+    if (!step.starter.empty()) task.starter_code = step.starter;
+    if (!step.solution.empty()) task.solution = step.solution;
+    if (!step.tests.empty()) task.tests = step.tests;
+    if (!marks_lesson_complete) draft_file = app.root + "/drafts/" + task.id + "_step_" + std::to_string(step_number) + (task.lang == Lang::C ? ".c" : ".cpp");
+    auto draft = read_file(draft_file);
+    editor.set_text(draft.empty() ? task.starter_code : draft);
+    edit_from=step.edit_from; edit_to=step.edit_to;
+    editor.lock_template(task.starter_code, edit_from, edit_to);
+}
+
 void LessonScreen::close(App& app) {
     if (lesson_index < 0) return;
     mkdir((app.root + "/drafts").c_str(), 0755);
-    std::ofstream(app.draft_path(app.lessons[lesson_index])) << editor.text();
+    std::ofstream(draft_file) << editor.text();
 }
 
 void LessonScreen::print(const std::string& text, Color c, bool mono) {
@@ -67,7 +88,8 @@ void LessonScreen::print(const std::string& text, Color c, bool mono) {
 // ---------------------------------------------------------------- run / check
 
 void LessonScreen::start_run(App& app) {
-    const Lesson& l = app.lessons[lesson_index];
+    const Lesson& l = task;
+    just_completed = false;
     close(app);   // save draft
     std::string input;
     for (const TestCase& t : l.tests) if (!t.hidden) { input = t.input; break; }
@@ -82,11 +104,12 @@ void LessonScreen::start_run(App& app) {
 }
 
 void LessonScreen::start_check(App& app) {
+    just_completed = false;
     close(app);
     console.clear();
     console_scroll = 0;
     print("Running the tests…", theme::text_dim, false);
-    Lesson l = app.lessons[lesson_index];
+    Lesson l = task;
     std::string code = editor.text();
     check_job = std::async(std::launch::async, [l, code] { return check_code(l, code); });
 }
@@ -94,11 +117,14 @@ void LessonScreen::start_check(App& app) {
 // Reports compile errors / crashes / memory errors. Returns true if there was a problem.
 static bool report_problems(LessonScreen& s, const RunResult& r) {
     s.editor.error_lines.clear();
+    s.details = r.compile_errors + "\n" + r.stderr_text;
+    s.show_details = false;
+    for (const auto& e : r.friendly) {
+        s.console.push_back({e.message, e.warning ? theme::warning : theme::danger, false});
+        if (!e.hint.empty()) s.console.push_back({e.hint, theme::text, false});
+    }
     if (!r.compiled) {
-        s.console.push_back({"Compilation failed:", theme::danger, false});
-        std::istringstream in(r.compile_errors);
-        std::string line;
-        while (std::getline(in, line)) s.console.push_back({line, theme::danger, true});
+        if (r.friendly.empty()) s.console.push_back({"This code could not be compiled. Ask the tutor or open the details.", theme::danger, false});
         for (int ln : r.error_lines) s.editor.error_lines.insert(ln);
         s.last_error = "Compiler output:\n" + r.compile_errors;
         return true;
@@ -132,20 +158,20 @@ void LessonScreen::poll_jobs(App& app) {
         last_error.clear();
         if (r.compiled) {
             print(r.output.empty() ? "(no output)" : r.output, r.output.empty() ? theme::text_dim : theme::text);
-            if (!r.compile_errors.empty()) print("Warnings:\n" + r.compile_errors, theme::warning);
+
         }
         if (!report_problems(*this, r) && r.compiled)
             print("Exit code " + std::to_string(r.exit_code), theme::text_dim, false);
     }
     if (ready(check_job)) {
         TestResult t = check_job.get();
-        const Lesson& l = app.lessons[lesson_index];
+        const Lesson& l = task;
         console.clear();
         last_error.clear();
-        if (t.passed == t.total) {
+        if (t.total > 0 && t.passed == t.total) {
             editor.error_lines.clear();
-            print("✓ All " + std::to_string(t.total) + " tests passed. Lesson complete!", theme::success, false);
-            if (!app.progress.completed.count(l.id)) {
+            print("✓ All " + std::to_string(t.total) + " tests passed. Well done!", theme::success, false);
+            if (marks_lesson_complete && !app.progress.completed.count(l.id)) {
                 app.progress.completed.insert(l.id);
                 progress_save(app.progress_path(), app.progress);
             }
@@ -172,8 +198,8 @@ void LessonScreen::ask_ai(int id, const std::string& shown_text) {
 
 // ---------------------------------------------------------------- drawing
 
-void LessonScreen::draw_theory(App& app, Rectangle r) {
-    const Lesson& l = app.lessons[lesson_index];
+void LessonScreen::draw_theory(App&, Rectangle r) {
+    const Lesson& l = task;
     panel(r, "Lesson " + std::to_string(lesson_index + 1));
     Rectangle body = panel_body(r, true);
     body.width -= 8;
@@ -247,6 +273,9 @@ void LessonScreen::draw_theory(App& app, Rectangle r) {
 void LessonScreen::draw_console(Rectangle r) {
     panel(r, "Console");
     Rectangle body = panel_body(r, true);
+    if (!details.empty()) {
+        if (button({r.x+r.width-125,r.y+2,123,29},show_details?"Hide details":"Show details",true,ButtonStyle::Ghost)) show_details=!show_details;
+    }
     body.width -= 8;
     float lh_mono = g_fonts.mono_size + 4, lh_ui = g_fonts.ui_size + 5;
 
@@ -258,6 +287,7 @@ void LessonScreen::draw_console(Rectangle r) {
         float fs = cl.mono ? g_fonts.mono_size : g_fonts.ui_size;
         for (const std::string& w : wrap_text(f, fs, cl.text, body.width)) rows.push_back({w, cl.color, cl.mono});
     }
+    if (show_details) for(const auto& line:wrap_text(g_fonts.mono,g_fonts.mono_size,details,body.width)) rows.push_back({line,theme::text_dim,true});
     float h = 0;
     for (const Row& row : rows) h += row.mono ? lh_mono : lh_ui;
 
@@ -276,8 +306,8 @@ void LessonScreen::draw_console(Rectangle r) {
     scroll_area(body, h + 10, console_scroll);
 }
 
-void LessonScreen::draw_ai(App& app, Rectangle r) {
-    const Lesson& l = app.lessons[lesson_index];
+void LessonScreen::draw_ai(App&, Rectangle r) {
+    const Lesson& l = task;
     panel(r, "AI tutor");
     bool on = ai_available();
     std::string st = on ? ai_model() : "offline";
@@ -344,65 +374,47 @@ void LessonScreen::draw_ai(App& app, Rectangle r) {
 
     std::string answer;
     if (ai_request >= 0 && ai_poll(ai_request, answer)) {
-        chat.push_back({true, answer});
+        chat.push_back({true, tutor_message(answer)});
         ai_request = -1;
         chat_stick_bottom = true;
     }
 }
 
-void LessonScreen::update_and_draw(App& app) {
+void LessonScreen::check(App& app) {
+    if (!busy()) start_check(app);
+}
+
+void LessonScreen::update_and_draw(App& app, Rectangle area) {
     poll_jobs(app);
-    const Lesson& l = app.lessons[lesson_index];
-    float W = (float)GetScreenWidth(), H = (float)GetScreenHeight();
-    float m = 12, top = 56;
-
-    // ---- top bar
-    if (button({m, 10, 120, 36}, "← Lessons", !busy(), ButtonStyle::Ghost) ||
-        (IsKeyPressed(KEY_ESCAPE) && !busy())) {
-        close(app);
-        app.screen = Screen::Course;
-        return;
-    }
-    std::string title = std::to_string(lesson_index + 1) + ". " + l.title + (l.lang == Lang::C ? "  ·  C" : "  ·  C++");
-    draw_text(g_fonts.ui_bold, g_fonts.ui_size + 1, title, m + 136, 18, theme::text);
-    if (app.progress.completed.count(l.id))
-        draw_text(g_fonts.ui, g_fonts.ui_size, "✓ completed", m + 150 + text_width(g_fonts.ui_bold, g_fonts.ui_size + 1, title),
-                  19, theme::success);
-
-    float bx = W - m;
-    bool has_next = lesson_index + 1 < (int)app.lessons.size();
-    if (just_completed && has_next) {
-        bx -= 150;
-        if (button({bx, 10, 150, 36}, "Next lesson →", !busy(), ButtonStyle::Primary)) {
-            close(app);
-            open(app, lesson_index + 1);
-            return;
-        }
-        bx -= 8;
-    }
-    bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+    const Lesson& l = task;
+    const float m = 12;
+    const float top = area.y + 46;
+    float bx = area.x + area.width;
+    bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) || IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
     bx -= 90;
-    if (button({bx, 10, 90, 36}, "Reset", !busy())) {
+    if (button({bx, area.y, 90, 36}, "Reset", !busy())) {
+        just_completed = false;
         editor.set_text(l.starter_code);
+        editor.lock_template(l.starter_code, edit_from, edit_to);
         console.clear();
         print("Code reset to the starting template.", theme::text_dim, false);
     }
-    bx -= 98;
-    if (button({bx, 10, 90, 36}, "Check", !busy(), ButtonStyle::Primary) || (ctrl && IsKeyPressed(KEY_ENTER) && !busy()))
+    if (ctrl && IsKeyPressed(KEY_ENTER) && !busy())
         start_check(app);
     bx -= 98;
-    if (button({bx, 10, 90, 36}, "▶ Run", !busy()) || (ctrl && IsKeyPressed(KEY_R) && !busy()))
+    if (button({bx, area.y, 90, 36}, "▶ Run", !busy()) || (ctrl && IsKeyPressed(KEY_R) && !busy()))
         start_run(app);
 
+
     // ---- layout: theory | editor/console | AI
-    float theory_w = std::clamp(W * 0.27f, 280.0f, 420.0f);
-    float ai_w = std::clamp(W * 0.25f, 280.0f, 400.0f);
-    float mid_x = m + theory_w + m, mid_w = W - mid_x - ai_w - 2 * m;
-    float avail_h = H - top - m;
+    float theory_w = std::clamp(area.width * 0.27f, 250.0f, 420.0f);
+    float ai_w = std::clamp(area.width * 0.25f, 250.0f, 400.0f);
+    float mid_x = area.x + theory_w + m, mid_w = area.width - theory_w - ai_w - 2 * m;
+    float avail_h = area.y + area.height - top;
     float console_h = std::max(150.0f, avail_h * 0.30f);
 
-    draw_theory(app, {m, top, theory_w, avail_h});
+    draw_theory(app, {area.x, top, theory_w, avail_h});
     editor.update_and_draw({mid_x, top, mid_w, avail_h - console_h - m});
     draw_console({mid_x, top + avail_h - console_h, mid_w, console_h});
-    draw_ai(app, {W - ai_w - m, top, ai_w, avail_h});
+    draw_ai(app, {area.x + area.width - ai_w, top, ai_w, avail_h});
 }

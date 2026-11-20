@@ -5,4 +5,10 @@ cmake-build-*/
 *.o
 # per-user state
 progress.txt
+welcome.txt
 drafts/
+
+# Local lesson position and answers
+steps.json
+steps.json.tmp
+__pycache__/

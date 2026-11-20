@@ -14,10 +14,13 @@ with the exact line instead of silently producing garbage.
 - [docs/plan-jeffrey.md](docs/plan-jeffrey.md), [docs/plan-ihor.md](docs/plan-ihor.md) — tasks per person
 - [AGENTS.md](AGENTS.md) — rules for AI coding agents and the plan change log
 
-## Features (MVP)
+## Features
 
-- Course screen with progress
-- Lesson screen: theory with code samples, code editor, console, AI tutor
+- Welcome screen, vertical course path, Continue and saved step progress
+- Guided Explore, Watch, Predict, Order, Choose, Modify, FindBug, Explain and Practice screens
+- Live memory view, debugger narration and progressive display levels
+- Locked template lines, glossary tooltips and friendly errors with optional raw details
+- Tutor on every screen, Why?, setup/download and verified More practice
 - Code editor: syntax highlighting, line numbers, auto-indent, auto-closing braces, paste
 - **Run** compiles and runs the code (3 s time limit) using the first test's input
 - **Check** runs all tests, including hidden ones, and explains the first failure
@@ -29,8 +32,15 @@ with the exact line instead of silently producing garbage.
 
 ```
 sudo apt install build-essential cmake gdb \
-    libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+    curl libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
 ```
+
+## Requirements (macOS)
+
+Install Apple's Command Line Tools (`xcode-select --install`) and CMake. The app uses
+Apple Clang and LLDB automatically; GDB and GNU linker flags are only used on Linux.
+Both systems use the same source files, lesson files and JSON fixtures. Do not copy a
+build folder between machines: run CMake on each machine.
 
 For the AI tutor, install [Ollama](https://ollama.com) and pull a small code model:
 
@@ -39,7 +49,10 @@ ollama pull qwen2.5-coder:3b
 ollama serve            # if it is not already running as a service
 ```
 
+The app also offers **Tutor setup → Download model** and **Continue without AI**.
 Use another model with `CODELENS_MODEL=llama3.2:3b ./build/codelens`.
+The default endpoint is `127.0.0.1:11434`; `CODELENS_OLLAMA_HOST` and
+`CODELENS_OLLAMA_PORT` configure both the chat and the setup adapter.
 
 ## Build and run
 
@@ -47,16 +60,31 @@ Use another model with `CODELENS_MODEL=llama3.2:3b ./build/codelens`.
 cmake -B build
 cmake --build build -j
 ./build/codelens
-./build/tests           # engine unit tests
+./build/tests           # engine checks
+./build/ui_tests        # UI journey checks; needs a display (xvfb-run -a on Linux)
 ```
 
 Engine and tests only (no raylib): `cmake -B build -DBUILD_APP=OFF`.
 
+On first launch, the welcome screen introduces the three learning stages and opens
+lesson 1. Its setting is stored in `welcome.txt` next to `progress.txt`. Opening
+a lesson follows its steps in order; the final Practice step contains the editor,
+console and tutor. Other steps use their own interactions and checks. The Pointers
+lesson contains the complete current guided journey. Older one-step lessons still
+open directly in Practice; new beginner lesson content remains Jeffrey's part.
+Step progress is saved in `steps.json`; editable tasks use separate files in `drafts/`.
+
 Run `./build/codelens --memory-preview` to inspect the seven memory snapshots in
 `tests/fixtures`. Select a snapshot at the top, hover over a variable or heap block
 to see its address, and use the slider in **Array** to change the pointer target.
+The level switch progressively enables function frames, addresses and heap blocks.
+This is a developer tool. Student views use `Step::show` from the shared contract.
+Missing future scene and AI APIs are isolated in `src/ui/services.cpp`; real
+`scene_get`/`scene_state` implementations take precedence automatically.
 
-Shortcuts: `Ctrl+R` run, `Ctrl+Enter` check, `Esc` back to lessons, `Shift+wheel` horizontal scroll.
+Shortcuts: `Ctrl+R` / `Cmd+R` run, `Ctrl+Enter` / `Cmd+Enter` check,
+`F10` next line, `F11` step into, `Shift+F11` step out, `Esc` back,
+`Shift+wheel` horizontal scroll. On some Mac keyboards hold Fn for the F keys.
 
 ## Project structure
 
@@ -147,11 +175,13 @@ target (`&y` or `y`). `./build/tests` checks every step of every lesson.
 ## Debugger
 
 `debug_start`, `debug_next`, `debug_step`, `debug_finish`, `debug_run_to_line`, `debug_state`
-drive GDB through its machine interface. The program is built with `-g -O0` and a small heap
+drive GDB through its machine interface on Linux and LLDB on macOS. The program is built with `-g -O0` and a small heap
 tracker (`malloc`/`free` wrapped with `-Wl,--wrap`), so every snapshot has frames, variables
 (arrays and struct fields as children, pointers with their targets), heap blocks (live or freed,
 with contents) and the output so far. Crashes (segfault on line N), leaks at exit and lines that
-never finish (infinite loops) are reported in `ProgramState`. Requires `gdb`.
+never finish (infinite loops) are reported in `ProgramState`. Requires `gdb` on Linux or Apple Command Line Tools on macOS.
+The macOS backend uses the same state contract and a portable C allocation tracker.
+Run/Check on macOS use ASan/UBSan plus this tracker because Apple's ASan does not provide LeakSanitizer.
 
 After every step `ProgramState.note` holds one plain-English sentence ("Line 5: checked i < 3:
 true, so the loop body runs."). Variables appear only once their declaration has run, and a value

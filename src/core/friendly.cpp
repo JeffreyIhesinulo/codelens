@@ -53,11 +53,33 @@ std::string format_for_type(const std::string& t) {
 // Explains one diagnostic. Returns false for messages a beginner does not need to see.
 // at_line_start: gcc's column points at the first token of the line (so a missing ';' belongs
 // to the line before), rather than at the end of the line that lacks it.
-bool explain(const std::string& kind, const std::string& msg, int line, bool at_line_start, FriendlyError& out) {
+bool explain(const std::string& kind, std::string msg, int line, bool at_line_start, FriendlyError& out) {
     std::smatch m;
     out.line = line;
     out.warning = kind == "warning";
 
+    // Clang (Apple's compiler) describes the same mistakes with different words.
+    if (std::regex_search(msg, m, std::regex(R"(use of undeclared identifier '(\w+)')"))) msg = "'" + m[1].str() + "' undeclared";
+    if (std::regex_search(msg, m, std::regex(R"(call to undeclared (?:library )?function '(\w+)')"))) {
+        std::string fn = m[1];
+        msg = "implicit declaration of function '" + fn + "'";
+        if (fn == "printff") msg += "; did you mean 'printf'";
+    }
+    if (msg.find("expected ';' at end") != std::string::npos || msg.find("expected ';' after") != std::string::npos) msg = "expected ';' before";
+    if (msg == "expected '}'") msg = "expected declaration or statement at end of input";
+    if (msg.find("using the result of an assignment as a condition") != std::string::npos) msg = "suggest parentheses around assignment used as truth value";
+    if (std::regex_search(msg, m, std::regex(R"(format specifies type '([^']+)' but the argument has type '([^']+)')"))) {
+        std::string wanted=m[1], got=m[2], fmt=format_for_type(wanted);
+        if(wanted == "int *") fmt="%d";
+        msg="format '"+fmt+"' expects argument of type '"+wanted+"', but argument 2 has type '"+got+"'";
+    }
+    if (msg.find("missing terminating '\"' character") != std::string::npos) {
+        out.warning = false;
+        out.message = "A piece of text on line " + std::to_string(line) + " is missing its closing quote \".";
+        out.hint = "Text goes between two double quotes: \"hello\".";
+        return true;
+    }
+    if (msg == "expected expression") msg = "expected expression before ' }' token";
     // ---- errors
     if (std::regex_search(msg, std::regex(R"(expected (?:',' or )?';'(?: or ',')? before)"))) {
         int at = at_line_start && line > 1 ? line - 1 : line;
@@ -231,6 +253,9 @@ std::vector<FriendlyError> explain_compile_errors(const std::string& output) {
     for (std::sregex_iterator it(output.begin(), output.end(), linker), end; it != end; ++it) {
         FriendlyError e;
         if (explain("error", it->str(), 0, false, e)) add(e);
+    }
+    if(output.find("\"_main\", referenced from:") != std::string::npos) {
+        FriendlyError e; explain("error", "undefined reference to `main'", 0, false, e); add(e);
     }
     errors.insert(errors.end(), warnings.begin(), warnings.end());
     return errors;

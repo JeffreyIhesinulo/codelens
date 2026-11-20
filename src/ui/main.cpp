@@ -1,8 +1,11 @@
 // CodeLens — entry point.
 #include "screens.h"
 #include "memview_preview.h"
+#include "services.h"
 
 #include <sys/stat.h>
+#include <fstream>
+#include <cstdlib>
 
 static bool dir_exists(const std::string& p) {
     struct stat st;
@@ -39,19 +42,42 @@ int main(int argc, char** argv) {
     app.root = root;
     app.lessons = lessons_load(app.root + "/lessons");
     app.progress = progress_load(app.progress_path());
-    ai_init();
+    app.screen = std::ifstream(app.welcome_path()) ? Screen::Course : Screen::Welcome;
+    app.load_steps();
+    const char* ai_host=std::getenv("CODELENS_OLLAMA_HOST");
+    const char* ai_port=std::getenv("CODELENS_OLLAMA_PORT");
+    ai_init(ai_host?ai_host:"127.0.0.1",ai_port?std::atoi(ai_port):11434);
+    tutor_refresh();
+    RenderTexture2D backdrop=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
     SetExitKey(KEY_NULL);   // Esc is used for "back"
     while (!WindowShouldClose()) {
+        auto tutor=tutor_status();
+        if(app.screen==Screen::Course&&!app.ai_setup_checked&&tutor.checked){
+            app.ai_setup_checked=true;
+            if(!tutor.server||!tutor.installed)app.screen=Screen::AiSetup;
+        }
         ui_begin_frame();
+        if(backdrop.texture.width!=GetScreenWidth()||backdrop.texture.height!=GetScreenHeight()){UnloadRenderTexture(backdrop);backdrop=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());}
+        if (!app.tutor.visible) {
+            BeginTextureMode(backdrop);
+            ClearBackground(theme::bg);
+            if (app.screen == Screen::Welcome) draw_welcome_screen(app);
+            else if (app.screen == Screen::AiSetup) draw_ai_setup_screen(app);
+            else if (app.screen == Screen::Course) draw_course_screen(app);
+            else app.steps.update_and_draw(app);
+            EndTextureMode();
+        }
         BeginDrawing();
         ClearBackground(theme::bg);
-        if (app.screen == Screen::Course) draw_course_screen(app);
-        else app.lesson.update_and_draw(app);
+        DrawTextureRec(backdrop.texture,{0,0,(float)backdrop.texture.width,-(float)backdrop.texture.height},{0,0},WHITE);
+        app.tutor.update_and_draw();
         EndDrawing();
         ui_end_frame();
     }
 
     if (app.screen == Screen::Lesson) app.lesson.close(app);
+    app.steps.shutdown();
+    UnloadRenderTexture(backdrop);
     fonts_unload();
     CloseWindow();
     return 0;

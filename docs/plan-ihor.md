@@ -163,13 +163,16 @@ int  ai_generate_task(const Lesson& lesson);                      // "More pract
 
 ## Done checklist
 - [ ] Every student screen passes the AGENTS.md checklist (goal, terms explained, purpose of each control, what happened, code line, no empty space, tutor button, one main button)
-- [ ] `draw_memory` levels + switch in `--memory-preview`
-- [ ] Welcome screen
-- [ ] Guided lesson screen: bar, step dots, main button
-- [ ] Watch with live debugger + narration, F10/F11
-- [ ] Predict, Order, Choose
-- [ ] Locked template in the editor; friendly errors in the console
-- [ ] Explore (generic), Modify/FindBug with Debug, Explain
-- [ ] Course map path + Continue; lesson notes drawer
-- [ ] Glossary tooltips; AI tutor button; animations
-- [ ] Ask the tutor + Why? on every step; AI setup screen with model download; More practice
+- [x] `draw_memory` levels + switch in `--memory-preview`
+- [x] Welcome screen
+- [x] Guided lesson screen: bar, step dots, main button
+- [x] Watch with live debugger + narration, F10/F11
+- [x] Predict, Order, Choose
+- [x] Locked template in the editor; friendly errors in the console
+- [x] Explore (generic), Modify/FindBug with Debug, Explain
+- [x] Course map path + Continue; lesson notes drawer
+- [x] Glossary tooltips; AI tutor button; animations
+- [x] Ask the tutor + Why? on every step; AI setup screen with model download; More practice
+
+Technical UI items are implemented; scene/AI adapters will be reconciled with Jeffrey's later APIs.
+The complete-beginner screen review and real-model quality check still need team validation.

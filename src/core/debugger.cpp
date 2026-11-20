@@ -6,6 +6,9 @@
 #include "app.h"
 #include "internal.h"
 #include "mi.h"
+#ifdef __APPLE__
+#include "debugger_lldb.h"
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -21,6 +24,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifndef __APPLE__
 // Linked into every program run under the debugger. Records every malloc/free
 // made by the student's code (not by libc itself) in a global array GDB can read.
 static const char* TRACKER_SOURCE = R"(
@@ -89,6 +93,7 @@ ClDecls()
 
 static const int STEP_TIMEOUT_MS = 3000;
 static const int MAX_STEPS = 2000;
+#endif
 
 namespace {
 
@@ -98,6 +103,7 @@ uint64_t first_hex(const std::string& s) {
     return std::strtoull(s.c_str() + p, nullptr, 16);
 }
 
+#ifndef __APPLE__
 std::string read_file(const std::string& path) {
     std::ifstream f(path);
     std::stringstream ss; ss << f.rdbuf();
@@ -135,6 +141,11 @@ std::vector<std::string> split_aggregate(const std::string& v) {
     return parts;
 }
 
+#endif
+
+#ifdef __APPLE__
+using Session = LldbSession;
+#else
 class Session {
 public:
     ~Session() { stop(); }
@@ -687,6 +698,7 @@ void Session::refresh() {
     fill_heap_cells();
 }
 
+#endif
 Session g_ui;   // the session the UI drives
 
 }  // namespace

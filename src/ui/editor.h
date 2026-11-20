@@ -12,10 +12,15 @@ struct CodeEditor {
     std::set<int> error_lines;     // 1-based, highlighted red
     double last_input = 0;         // for cursor blinking
     bool scroll_to_cursor = false;
+    bool read_only = false;
+    int highlighted_line = 0;
+    int locked_prefix = 0, locked_suffix = 0;
 
     void set_text(const std::string& text);
     std::string text() const;
     std::string numbered_text() const;   // "  1 | code" — for AI prompts
+    void lock_template(const std::string& starter, int from, int to);
+    bool editable(int line) const;
 
     // Handles input and draws inside r.
     void update_and_draw(Rectangle r);

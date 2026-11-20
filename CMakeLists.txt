@@ -22,6 +22,7 @@ add_library(core STATIC ${CORE_SRC})
 target_include_directories(core PUBLIC src/core)
 target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_options(core PRIVATE -Wall -Wextra)
+target_compile_definitions(core PRIVATE CODELENS_CORE_ROOT="${CMAKE_SOURCE_DIR}/src/core")
 
 # ---------- Tests ----------
 add_executable(tests tests/tests.cpp)
@@ -45,6 +46,11 @@ if(BUILD_APP)
 
   file(GLOB UI_SRC CONFIGURE_DEPENDS src/ui/*.cpp)
   add_executable(codelens ${UI_SRC})
+  list(REMOVE_ITEM UI_SRC "${CMAKE_SOURCE_DIR}/src/ui/main.cpp")
+  add_executable(ui_tests tests/ui_tests.cpp ${UI_SRC})
+  target_link_libraries(ui_tests PRIVATE core raylib)
+  target_include_directories(ui_tests PRIVATE src/ui)
+  target_compile_options(ui_tests PRIVATE -Wall -Wextra)
   target_link_libraries(codelens PRIVATE core raylib)
   target_compile_options(codelens PRIVATE -Wall -Wextra)
   # The app finds lessons/ and assets/ next to the source tree by default

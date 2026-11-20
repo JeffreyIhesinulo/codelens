@@ -31,14 +31,18 @@ void draw_preview(const std::vector<Snapshot>& snapshots, const std::vector<std:
     constexpr float margin = 28;
     constexpr float sidebar_width = 258;
     const float width = GetScreenWidth() - 2 * margin;
-    const float height = GetScreenHeight() - 128;
+    const float height = GetScreenHeight() - 174;
 
     draw_text(g_fonts.title, g_fonts.title_size, "Memory visualizer", margin, 23, theme::text);
     if (int clicked = action_buttons({margin, 69, width, 36}, labels, active); clicked >= 0) active = clicked;
+    static int level = 3;
+    if (int clicked = action_buttons({margin, 115, width, 32},
+                                    {"Values", "Frames", "Addresses", "Heap"}, level); clicked >= 0)
+        level = clicked;
 
     const Snapshot& snapshot = snapshots[active];
     ProgramState state = snapshot.state;
-    Rectangle side = {margin + width - sidebar_width, 120, sidebar_width, height - margin};
+    Rectangle side = {margin + width - sidebar_width, 166, sidebar_width, height - margin};
     Rectangle diagram = {margin, side.y, width - sidebar_width - 16, side.height};
     panel(side, "Snapshot");
     Rectangle info = panel_body(side, true);
@@ -65,7 +69,7 @@ void draw_preview(const std::vector<Snapshot>& snapshots, const std::vector<std:
     text_area({info.x, notes_y + 27, info.width, info.y + info.height - notes_y - 27},
               notes, "Write an observation…");
 
-    if (snapshot.error.empty()) draw_memory(state, diagram);
+    if (snapshot.error.empty()) draw_memory(state, diagram, static_cast<ui::ShowLevel>(level));
     else draw_wrapped(g_fonts.ui, g_fonts.ui_size, snapshot.error, diagram, theme::danger);
 }
 }
