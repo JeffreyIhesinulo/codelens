@@ -186,6 +186,9 @@ bool LldbSession::exec(const std::string &command) {
 bool LldbSession::run_to_line(int line) {
     if (!active() || state.finished)
         return false;
+    // Already stopped at that line in main: a breakpoint there would never be hit again.
+    if (state.line == line && state.stack.size() == 1)
+        return true;
     std::string response, error;
     if (!exchange(json({{"action", "line"}, {"line", line}}).dump(), response, true))
         return false;

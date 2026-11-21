@@ -259,12 +259,12 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
         }
     }
     // A practice step without its own content uses the lesson-level task, and vice versa.
+    // Its text stays empty: the lesson's @theory is shown with it (copying it in showed it twice).
     for (Step& s : out.steps) {
         if (s.kind != StepKind::Practice) continue;
         if (s.starter.empty())  s.starter = out.starter_code;
         if (s.solution.empty()) s.solution = out.solution;
         if (s.tests.empty())    s.tests = out.tests;
-        if (s.text.empty())     s.text = out.theory;
         if (out.tests.empty()) {
             out.theory = s.text; out.starter_code = s.starter; out.solution = s.solution; out.tests = s.tests;
         }
@@ -275,7 +275,6 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
         s.kind = StepKind::Practice;
         s.show = out.show;
         s.title = "Practice";
-        s.text = out.theory;
         s.starter = out.starter_code;
         s.solution = out.solution;
         s.tests = out.tests;

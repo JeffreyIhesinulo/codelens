@@ -2,6 +2,7 @@
 @title  Loops
 @topic  for loops
 @lang   c
+@show   values
 
 @theory
 A for loop repeats code a known number of times:
@@ -66,3 +67,127 @@ int main(void) {
 100
 @expected
 5050
+
+#! ------------------------------------------------------------------
+#! Steps: Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step watch
+@title  Watch a loop
+@code
+#include <stdio.h>
+
+int main(void) {
+    for (int i = 1; i <= 3; i++) {
+        printf("%d\n", i);
+    }
+    printf("done\n");
+    return 0;
+}
+@text
+Press Next line and watch i change in every round of the loop.
+A for loop has three parts: the start (int i = 1), the condition checked before every round (i <= 3) and the step after every round (i++).
+
+@step predict
+@title  Predict a value
+@code
+#include <stdio.h>
+
+int main(void) {
+    int sum = 0;
+    for (int i = 1; i <= 4; i++) {
+        sum += i;
+    }
+    printf("%d\n", sum);
+    return 0;
+}
+@line   8
+@expr   sum
+@text
+What is sum after line 8 runs?
+sum starts at 0 and the loop adds 1, 2, 3 and 4 to it.
+
+@step predict
+@title  Predict the output
+@code
+#include <stdio.h>
+
+int main(void) {
+    for (int i = 0; i < 3; i++) {
+        printf("Hi ");
+    }
+    printf("\n");
+    return 0;
+}
+@text
+What does this program print?
+
+@step choose
+@title  Count the rounds
+@code
+for (int i = 0; i < 5; i++) {
+    printf("round\n");
+}
+@text
+How many times does this loop print round?
+@option 4
+@option 5
+@option 6
+@option It never stops
+@correct 2
+@answer
+i takes the values 0, 1, 2, 3 and 4. When i becomes 5, i < 5 is false and the loop ends.
+
+@step find_bug
+@title  Find the bug
+@text
+Fix the loop so it prints every number from 1 to n.
+For n = 3 it should print 1, 2 and 3, but it stops after 2.
+@starter
+#include <stdio.h>
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+    for (int i = 1; i < n; i++) {
+        printf("%d\n", i);
+    }
+    return 0;
+}
+@editable 6-6
+@solution
+#include <stdio.h>
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+    for (int i = 1; i <= n; i++) {
+        printf("%d\n", i);
+    }
+    return 0;
+}
+@test
+@input
+3
+@expected
+1
+2
+3
+@hidden_test
+@input
+1
+@expected
+1
+
+@step explain
+@title  Explain it
+@text
+What would happen if you forgot the i++ part of a for loop?
+@rubric
+never; changes; forever; infinite
+@answer
+i would never change, so the condition would stay true and the loop would run forever
+(an infinite loop). CodeLens stops a program that runs longer than 3 seconds.
+
+@step practice
+@title  Practice

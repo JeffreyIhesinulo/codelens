@@ -2,6 +2,7 @@
 @title  Arrays
 @topic  arrays
 @lang   c
+@show   values
 
 @theory
 An array stores several values of the same type next to each other in memory.
@@ -71,3 +72,107 @@ int main(void) {
 42
 @expected
 42
+
+#! ------------------------------------------------------------------
+#! Steps: Explore -> Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step explore
+@title  Boxes in a row
+@scene  array
+@text
+Move the slider and watch which box the arrow p points to.
+An array is several boxes in a row with one name. The boxes are numbered from 0.
+
+@step watch
+@title  Watch an array
+@code
+#include <stdio.h>
+
+int main(void) {
+    int a[4] = {3, 8, 1, 5};
+    int total = 0;
+    for (int i = 0; i < 4; i++) {
+        total += a[i];
+    }
+    printf("%d\n", total);
+    return 0;
+}
+@text
+Press Next line and watch total grow.
+a[i] means "box number i of a". The loop visits the boxes 0, 1, 2 and 3.
+
+@step predict
+@title  Predict a box
+@code
+#include <stdio.h>
+
+int main(void) {
+    int a[4] = {3, 8, 1, 5};
+    printf("%d\n", a[2]);
+    return 0;
+}
+@line   4
+@expr   a[2]
+@text
+What is in a[2] after line 4 runs?
+Remember: numbering starts at 0.
+
+@step choose
+@title  The last box
+@code
+int a[5] = {10, 20, 30, 40, 50};
+@text
+Which is the last box of this array?
+@option a[5]
+@option a[4]
+@option a[0]
+@option a[6]
+@correct 2
+@answer
+int a[5] has five boxes: a[0], a[1], a[2], a[3] and a[4]. a[5] would be outside the array.
+
+@step find_bug
+@title  Find the bug
+@text
+Fix the loop so it stops at the last box of the array.
+Right now it reads a box past the end of the array, and CodeLens reports a memory error.
+@starter
+#include <stdio.h>
+
+int main(void) {
+    int a[5] = {1, 2, 3, 4, 5};
+    for (int i = 0; i <= 5; i++) {
+        printf("%d ", a[i]);
+    }
+    printf("\n");
+    return 0;
+}
+@editable 5-5
+@solution
+#include <stdio.h>
+
+int main(void) {
+    int a[5] = {1, 2, 3, 4, 5};
+    for (int i = 0; i < 5; i++) {
+        printf("%d ", a[i]);
+    }
+    printf("\n");
+    return 0;
+}
+@test
+@expected
+1 2 3 4 5
+
+@step explain
+@title  Explain it
+@text
+Why is the last box of int a[5] called a[4] and not a[5]?
+@rubric
+0; zero; start; five
+@answer
+Numbering starts at 0, so the five boxes are a[0] to a[4]. a[5] would be the sixth box,
+which does not belong to the array.
+
+@step practice
+@title  Practice

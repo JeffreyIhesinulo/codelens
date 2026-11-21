@@ -21,7 +21,21 @@ std::string name(StepKind kind) {
         s[0] = std::toupper(s[0]);
     return s;
 }
+// The first line of the step's own text is its instruction; the rest explains it.
+std::string first_line(const std::string &text) { return text.substr(0, text.find('\n')); }
+std::string rest_of(const std::string &text) {
+    size_t nl = text.find('\n');
+    if (nl == std::string::npos)
+        return "";
+    std::string rest = text.substr(nl + 1);
+    for (char &c : rest)
+        if (c == '\n')
+            c = ' ';
+    return rest;
+}
 std::string goal(const Step &step) {
+    if (!step.text.empty() && step.kind != StepKind::Practice)
+        return first_line(step.text);
     switch (step.kind) {
     case StepKind::Explore:
         return "Try the controls and watch how the picture and code change.";
@@ -261,24 +275,30 @@ void StepScreen::update_and_draw(App &app) {
     }
     if (button({w - m - 164, 18, 164, 36}, "Ask the tutor", !waiting, ButtonStyle::Ghost))
         app.tutor.open(generated_task ? app.lesson.task : l, editing(s.kind) ? app.lesson.editor.numbered_text() : code.numbered_text(), facts(s, state) + (editing(s.kind) ? "\nLatest result: " + app.lesson.last_error : ""));
-    panel({m, 70, w - 2 * m, 105});
+    panel({m, 70, w - 2 * m, 125});
     draw_text(g_fonts.ui, 15,
               "Step " + std::to_string(step_index + 1) + " of " + std::to_string(l.steps.size()) + " · " +
                   name(s.kind),
               m + 16, 82, theme::accent);
     draw_wrapped(g_fonts.ui_bold, 18, goal(s), {m + 16, 107, w - 2 * m - 32, 50}, theme::text);
-    std::string terms =
-        s.kind == StepKind::Explore
-            ? "A pointer stores a box's address. & asks for the address; * uses the value there."
-        : s.kind == StepKind::Watch
-            ? "Next line runs the highlighted line. Step out finishes the current function call."
-        : editing(s.kind) && s.edit_from > 0 && !generated_task
-            ? "Dim lines are fixed. Edit the brighter lines; the editable area can grow."
-            : "";
-    if (!terms.empty())
-        draw_text(g_fonts.ui, 13, fit_text(g_fonts.ui, 13, terms, w - 2 * m - 32), m + 16, 153,
-                  theme::text_dim);
-    Rectangle body{m, 191, w - 2 * m, h - 285};
+    // Under the instruction: the lesson's explanation for this step, else a short usage hint.
+    std::string terms = s.kind == StepKind::Practice ? "" : rest_of(s.text);
+    if (terms.empty())
+        terms = s.kind == StepKind::Watch
+                    ? "Next line runs the highlighted line. Step out finishes the current function call."
+                : editing(s.kind) && s.edit_from > 0 && !generated_task
+                    ? "Dim lines are fixed. Edit the brighter lines; the editable area can grow."
+                    : "";
+    if (!terms.empty()) {
+        auto lines = wrap_text(g_fonts.ui, 14, terms, w - 2 * m - 32);
+        for (size_t i = 0; i < lines.size() && i < 2; ++i) {
+            std::string line = lines[i];
+            if (i == 1 && lines.size() > 2)
+                line = fit_text(g_fonts.ui, 14, line + " " + lines[2], w - 2 * m - 32);
+            draw_text(g_fonts.ui, 14, line, m + 16, 150 + i * 19.0f, theme::text_dim);
+        }
+    }
+    Rectangle body{m, 211, w - 2 * m, h - 305};
     bool write = editing(s.kind) && !debugging;
     if (write) {
         Rectangle taskarea = body;

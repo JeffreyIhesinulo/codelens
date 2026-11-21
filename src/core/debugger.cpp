@@ -420,6 +420,9 @@ bool Session::exec(const std::string& cmd) {
 
 bool Session::run_to_line(int line) {
     if (!active() || state.finished) return false;
+    // Already stopped at that line (e.g. the first line of main): a breakpoint there would
+    // never be hit again and the program would run to the end.
+    if (state.line == line && !state.stack.empty() && state.stack.size() == 1) return true;
     if (!command("-break-insert -t " + file_ + ":" + std::to_string(line))) return false;
     bool ok = exec("-exec-continue");
     if (ok && !state.finished) state.note = "Ran the program up to line " + std::to_string(line) + ".";

@@ -379,7 +379,8 @@ TEST(test_lesson_steps) {
         CHECK(l.steps[3].kind == StepKind::FindBug && l.steps[3].tests.size() == 1 && l.steps[3].tests[0].expected == "ok\n");
         CHECK(l.steps[4].rubric == "address; copy" && l.steps[4].sample_answer == "Because.");
         CHECK(l.steps[5].kind == StepKind::Practice);
-        CHECK(l.steps[5].tests.size() == 1 && l.steps[5].text == "Practice task text");   // filled from lesson level
+        CHECK(l.steps[5].tests.size() == 1 && l.steps[5].starter == "int main(void){}\n");   // filled from lesson level
+        CHECK(l.steps[5].text.empty());   // the lesson theory is shown with it, not copied (was shown twice)
     }
     CHECK(l.title == "X");   // step @title does not overwrite the lesson title
 

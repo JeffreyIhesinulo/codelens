@@ -2,6 +2,7 @@
 @title  Hello, C
 @topic  output
 @lang   c
+@show   values
 
 @theory
 Every C program starts running in main(). To print text, use printf from <stdio.h>.
@@ -41,3 +42,105 @@ int main(void) {
 @expected
 Hello, CodeLens!
 I am learning C.
+
+#! ------------------------------------------------------------------
+#! Steps: Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step watch
+@title  Your first program
+@code
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello!\n");
+    printf("I am a program.\n");
+    return 0;
+}
+@text
+Press Next line and watch what the program prints.
+A program is a list of instructions that run from top to bottom, starting inside main.
+printf prints the text between the quotes, and \n starts a new line.
+
+@step choose
+@title  Find the printing line
+@code
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello!\n");
+    return 0;
+}
+@text
+Which line prints text on the screen?
+@option #include <stdio.h>
+@option int main(void) {
+@option printf("Hello!\n");
+@option return 0;
+@correct 3
+@answer
+printf prints the text in quotes. #include brings printf into the program, main is where
+the program starts, and return 0 ends it.
+
+@step predict
+@title  Predict the output
+@code
+#include <stdio.h>
+
+int main(void) {
+    printf("Hi ");
+    printf("there!\n");
+    return 0;
+}
+@text
+What does this program print?
+Look closely: the first printf has no \n, so the next text continues on the same line.
+
+@step order
+@title  Build a program
+@text
+Put the lines in the right order to make a program that prints Hello, world!
+Every program starts with #include, then main with its instructions inside { }.
+@code
+#include <stdio.h>
+int main(void) {
+    printf("Hello, world!\n");
+    return 0;
+}
+
+@step modify
+@title  Change the message
+@text
+Change the program so it prints Hello, CodeLens! instead of Hello, world!
+Only the printf line can be edited. Press Run to try it, then Check.
+@starter
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, world!\n");
+    return 0;
+}
+@editable 4-4
+@solution
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, CodeLens!\n");
+    return 0;
+}
+@test
+@expected
+Hello, CodeLens!
+
+@step explain
+@title  Explain it
+@text
+In your own words: what does printf do, and what is \n for?
+@rubric
+prints; text; screen; new line
+@answer
+printf prints the text between the quotes on the screen. \n moves to a new line, so the
+next text starts on the line below.
+
+@step practice
+@title  Practice
