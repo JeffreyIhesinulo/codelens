@@ -86,6 +86,8 @@ int main(int argc, char **argv) {
     click(800, 510);
     assert(std::ifstream(app.welcome_path()));
     assert(app.screen == Screen::Lesson);
+    while (app.steps.job.valid())   // lesson 1 now opens on a Watch step, which starts the debugger first
+        render();
     click(65, 36);
     assert(app.screen == Screen::Course);
     render("course");
@@ -200,7 +202,7 @@ int main(int argc, char **argv) {
     assert(app.lesson.just_completed);
     assert(app.progress.completed.count("05_pointers"));
     render("practice-passed");
-    click(80, 210);
+    click(80, 230);   // Lesson notes (the step header is 20 px taller)
     assert(app.steps.notes);
     render("notes");
     click(960, 606);
@@ -304,7 +306,7 @@ int main(int argc, char **argv) {
     change.tests={{"","1\n",false}};change.edit_from=change.edit_to=3;modify.steps={change};
     app.lessons.push_back(modify);app.steps.open(app,app.lessons.size()-1);render();
     app.lesson.editor.set_text(change.solution);app.lesson.editor.lock_template(change.starter,3,3);
-    auto saved=app.lesson.editor.text();click(250,210);wait();assert(app.steps.debugging&&!app.steps.state.stack.empty());render("modify-debug");
+    auto saved=app.lesson.editor.text();click(250,230);wait();assert(app.steps.debugging&&!app.steps.state.stack.empty());render("modify-debug");
     click(435,520); // the secondary Back to code control, when in Watch mode
     if(app.steps.debugging){for(int i=0;i<15&&!app.steps.state.finished;++i){app.steps.launch_debug(app,"next");wait();}next();}
     assert(!app.steps.debugging&&app.lesson.editor.text()==saved);next();assert(app.lesson.just_completed);
@@ -315,7 +317,13 @@ int main(int argc, char **argv) {
         for(int level=0;level<4;++level){BeginDrawing();ClearBackground(theme::bg);draw_memory(memory,{50,50,1000,550},(ShowLevel)level);EndDrawing();}
     }
     // Compiler errors appear as friendly prose; details remain available.
-    app.steps.open(app, 0);
+    // (lesson 1 now starts with Understand steps, so use a copy that has only its Practice step)
+    Lesson practice_only = app.lessons[0];
+    practice_only.id = "ui_practice";
+    practice_only.steps = {app.lessons[0].steps.back()};
+    app.lessons.push_back(practice_only);
+    app.steps.open(app, (int)app.lessons.size() - 1);
+    render();
     app.lesson.editor.set_text("int main(void) {\n return\n}\n");
     app.lesson.check(app);
     wait();

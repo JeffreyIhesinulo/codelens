@@ -2,6 +2,7 @@
 @title  Conditions
 @topic  if/else
 @lang   c
+@show   values
 
 @theory
 scanf reads input. &n means "the address of n", so scanf can store the value there.
@@ -62,3 +63,127 @@ negative
 0
 @expected
 zero
+
+#! ------------------------------------------------------------------
+#! Steps: Explore -> Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step explore
+@title  Only one branch runs
+@scene  condition
+@text
+Move the slider and watch which block of the if runs.
+The if checks x >= 10. When it is true the first block runs, otherwise the else block runs. Never both.
+
+@step watch
+@title  Watch an if
+@code
+#include <stdio.h>
+
+int main(void) {
+    int temperature = 25;
+    if (temperature > 20) {
+        printf("Warm\n");
+    } else {
+        printf("Cold\n");
+    }
+    return 0;
+}
+@text
+Press Next line and watch which printf runs.
+On the if line the program checks temperature > 20. The sentence under the picture tells you if it was true.
+
+@step predict
+@title  Predict the output
+@code
+#include <stdio.h>
+
+int main(void) {
+    int temperature = 15;
+    if (temperature > 20) {
+        printf("Warm\n");
+    } else {
+        printf("Cold\n");
+    }
+    return 0;
+}
+@text
+What does the program print now that the temperature is 15?
+
+@step choose
+@title  Compare or assign?
+@code
+int x = 5;
+if (/* which condition? */) {
+    printf("x is five\n");
+}
+@text
+Which condition checks whether x is equal to 5?
+@option if (x = 5)
+@option if (x == 5)
+@option if (x != 5)
+@option if (5 = x)
+@correct 2
+@answer
+== compares two values. A single = puts a value into a variable, and != means "not equal".
+
+@step find_bug
+@title  Find the bug
+@text
+Fix the if line so that a score of exactly 50 passes.
+A score of 50 or more should pass, but right now 50 gets fail. Use Debug my code to watch it.
+@starter
+#include <stdio.h>
+
+int main(void) {
+    int score;
+    scanf("%d", &score);
+    if (score > 50) {
+        printf("pass\n");
+    } else {
+        printf("fail\n");
+    }
+    return 0;
+}
+@editable 6-6
+@solution
+#include <stdio.h>
+
+int main(void) {
+    int score;
+    scanf("%d", &score);
+    if (score >= 50) {
+        printf("pass\n");
+    } else {
+        printf("fail\n");
+    }
+    return 0;
+}
+@test
+@input
+50
+@expected
+pass
+@test
+@input
+70
+@expected
+pass
+@hidden_test
+@input
+49
+@expected
+fail
+
+@step explain
+@title  Explain it
+@text
+Why does only one of the two printf lines run in an if / else?
+@rubric
+condition; true; false; else
+@answer
+The if checks a condition. When it is true, the first block runs and the else block is
+skipped. When it is false, only the else block runs.
+
+@step practice
+@title  Practice

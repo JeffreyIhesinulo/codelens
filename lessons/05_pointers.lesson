@@ -81,8 +81,8 @@ int main(void) {
 @title  Where does the arrow go?
 @scene  pointer_basics
 @text
-Press the buttons and watch the arrow. p = &a stores the address of a in p.
-*p = 5 changes whatever p points at. Try *p = 5 while p is NULL.
+Press the buttons and watch where the arrow p points.
+p = &a stores the address of a in p. *p = 5 changes the box p points at. Try *p = 5 while p is NULL.
 
 @step watch
 @title  Watch swap
@@ -102,8 +102,8 @@ int main(void) {
     return 0;
 }
 @text
-Step through the program. On line 11 press "Step into" to enter swap,
-then watch where a and b point and how x and y change.
+Press Next line, and on line 11 press Step into to go inside swap.
+Watch where a and b point, and how x and y in main change through them.
 
 @step predict
 @title  Predict a value
@@ -185,8 +185,8 @@ void swap(int *a, int *b) {
 @step find_bug
 @title  Find the bug
 @text
-This swap does not swap anything. Use the debugger to see why, then fix it.
-The program reads two numbers and should print them swapped.
+Fix swap so that the two numbers really change places.
+Right now swap only changes its own copies. Use Debug my code to watch it.
 @starter
 #include <stdio.h>
 
