@@ -27,6 +27,7 @@ struct Box {
     bool error = false;
     bool in_array = false;
     bool flashing = false;
+    bool selected = false;
     std::string animation_key = "";
 };
 
@@ -155,6 +156,7 @@ void draw_box(const Box& box) {
     Color fill = (group || aggregate) ? theme::panel_hi : theme::bg;
     if (box.error) fill = theme::error_bg;
     Color border = box.error ? theme::danger : theme::border;
+    if (box.selected) { fill = theme::accent_dk; border = theme::accent; }
     if (box.flashing) { fill = theme::accent_dk; border = theme::accent; }
     Color ink = box.freed ? theme::text_dim : (box.pointer ? theme::accent : theme::text);
 
@@ -342,8 +344,8 @@ void draw_address(const Column& column) {
 }
 }
 
-void draw_memory(const ProgramState& state, Rectangle area, ui::ShowLevel level) {
-    if (area.width < 160 || area.height < 120) return;
+void draw_memory(const ProgramState& state, Rectangle area, ui::ShowLevel level, uint64_t highlighted_address) {
+    if (area.width < 160 || area.height < (level >= ui::ShowLevel::Frames ? 120 : 60)) return;
     static float stack_scroll = 0, heap_scroll = 0;
     const bool frames = level >= ui::ShowLevel::Frames;
     const bool addresses = level >= ui::ShowLevel::Addresses;
@@ -396,6 +398,10 @@ void draw_memory(const ProgramState& state, Rectangle area, ui::ShowLevel level)
     if (has_heap)
         for (size_t i = 0; i < state.heap.size(); ++i)
             add_block(heap, state.heap[i], i + 1, leak && state.finished && !state.heap[i].freed, state);
+
+    if (highlighted_address)
+        for (Box& box : stack.boxes)
+            box.selected = box.address == highlighted_address && box.kind != BoxKind::Array;
 
     // Centre short content. A tall stack starts at the top and scrolls.
     float stack_shift = std::max(0.0f, (stack.view.height - stack.y) / 2);

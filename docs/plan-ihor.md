@@ -98,6 +98,16 @@ int  ai_generate_task(const Lesson& lesson);                      // "More pract
 
 ## Tasks
 
+### Follow-up (22 Nov)
+- Order cards support dragging, insertion feedback and edge scrolling; arrow buttons remain available.
+- The editor supports mouse/keyboard selection, copy/cut/paste, undo/redo and whole-line deletion,
+  while preserving locked template lines. Shortcuts are listed in the README.
+- The expanded Hello, Conditions, Loops and Arrays lessons use output, branch, counter and selected
+  array-box views. Explain feedback uses each step's rubric.
+- Preserve completed tasks when new steps are inserted; keep drafts intact. Draw normal screens at
+  the display's native resolution and capture the background only while the tutor is open.
+- UI interaction checks live in `src/ui/checks/`; they use an isolated temporary profile.
+
 ### Week 1 (16–20 Nov)
 - Keep `--memory-preview` as your developer tool; do not polish it for students.
 - **`draw_memory(state, area, ShowLevel level)`**

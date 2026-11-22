@@ -74,6 +74,11 @@ guided lesson screen.
 
 Newest first. When the plan changes, add an entry here and update `docs/`.
 
+### 2026-11-22 — UI follow-up for the expanded lessons
+Ihor requested Order card dragging and editor selection/shortcuts, plus visual support for
+Jeffrey's expanded lessons 1–4. Keep these changes in `src/ui`; lesson content and engine
+interfaces remain with their existing owners. See the follow-up in `docs/plan-ihor.md`.
+
 ### 2026-11-17 (AI) — the local AI tutor is the main feature
 The team decided the local AI (Ollama, runs on the student's computer, offline, free, private) is
 the project's main feature and must be visible in every stage, not only as a chat in Practice.

@@ -21,7 +21,9 @@ with the exact line instead of silently producing garbage.
 - Live memory view, debugger narration and progressive display levels
 - Locked template lines, glossary tooltips and friendly errors with optional raw details
 - Tutor on every screen, Why?, setup/download and verified More practice
-- Code editor: syntax highlighting, line numbers, auto-indent, auto-closing braces, paste
+- Code editor: syntax highlighting, selection, copy/cut/paste, undo/redo and protected template lines
+- Order cards can be dragged or moved with arrow buttons
+- Output, condition branches, loop counters and selected array boxes follow the program state
 - **Run** compiles and runs the code (3 s time limit) using the first test's input
 - **Check** runs all tests, including hidden ones, and explains the first failure
 - Compile errors and memory errors are highlighted in the editor
@@ -62,6 +64,7 @@ cmake --build build -j
 ./build/codelens
 ./build/tests           # engine checks
 ./build/ui_tests        # UI journey checks; needs a display (xvfb-run -a on Linux)
+./build/ui_interaction_checks # selection, dragging, progress migration and lessons 1–4; needs a display
 ```
 
 Engine and tests only (no raylib): `cmake -B build -DBUILD_APP=OFF`.
@@ -69,10 +72,11 @@ Engine and tests only (no raylib): `cmake -B build -DBUILD_APP=OFF`.
 On first launch, the welcome screen introduces the three learning stages and opens
 lesson 1. Its setting is stored in `welcome.txt` next to `progress.txt`. Opening
 a lesson follows its steps in order; the final Practice step contains the editor,
-console and tutor. Other steps use their own interactions and checks. The Pointers
-lesson contains the complete current guided journey. Older one-step lessons still
-open directly in Practice; new beginner lesson content remains Jeffrey's part.
+console and tutor. Other steps use their own interactions and checks. Hello, Conditions,
+Loops, Arrays and Pointers now have guided journeys. Lessons without explicit steps
+still open directly in Practice; lesson content remains Jeffrey's part.
 Step progress is saved in `steps.json`; editable tasks use separate files in `drafts/`.
+When lesson content changes, completed matching steps are retained and new steps remain unfinished.
 
 Run `./build/codelens --memory-preview` to inspect the seven memory snapshots in
 `tests/fixtures`. Select a snapshot at the top, hover over a variable or heap block
@@ -85,6 +89,12 @@ Missing future scene and AI APIs are isolated in `src/ui/services.cpp`; real
 Shortcuts: `Ctrl+R` / `Cmd+R` run, `Ctrl+Enter` / `Cmd+Enter` check,
 `F10` next line, `F11` step into, `Shift+F11` step out, `Esc` back,
 `Shift+wheel` horizontal scroll. On some Mac keyboards hold Fn for the F keys.
+
+In the code editor, use mouse dragging or Shift+arrows to select text. Click a line number
+to select the whole line; double-click a word to select it. `Ctrl`/`Cmd` + `A`, `C`, `X`, `V`
+select all editable text, copy, cut and paste. `Ctrl`/`Cmd+Z` undoes, `Ctrl`/`Cmd+Shift+Z`
+redoes, `Ctrl`/`Cmd+L` selects the current line, and `Ctrl`/`Cmd+Shift+K` deletes it.
+Locked lines remain protected. Read-only code views allow selection and copying.
 
 ## Project structure
 
@@ -203,4 +213,3 @@ explains words and symbols for tooltips.
 - AI code review after a lesson is completed
 - AI-generated practice tasks, verified by compiling a reference solution before showing them
 - Lessons 6–12 (strings, structs, dynamic memory, recursion, C++ classes, STL)
-- Editor: mouse selection, copy selection, undo
