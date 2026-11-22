@@ -7,7 +7,7 @@
 #include <fstream>
 #include <cstdlib>
 
-static bool dir_exists(const std::string& p) {
+static bool dir_exists(const std::string &p) {
     struct stat st;
     return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
@@ -15,7 +15,8 @@ static bool dir_exists(const std::string& p) {
 // lessons/ and assets/ live in the project root. Prefer the current directory,
 // fall back to the source tree the app was built from.
 static std::string find_root() {
-    if (dir_exists("lessons") && dir_exists("assets")) return ".";
+    if (dir_exists("lessons") && dir_exists("assets"))
+        return ".";
 #ifdef CODELENS_ROOT
     return CODELENS_ROOT;
 #else
@@ -23,14 +24,15 @@ static std::string find_root() {
 #endif
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     const bool memory_preview = argc > 1 && std::string(argv[1]) == "--memory-preview";
     const std::string root = find_root();
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(1366, 800, memory_preview ? "CodeLens · Memory visualizer" : "CodeLens");
     SetWindowMinSize(1100, 640);
     SetTargetFPS(60);
-    if (!fonts_load(root + "/assets")) TraceLog(LOG_WARNING, "CodeLens: fonts not found in %s/assets", root.c_str());
+    if (!fonts_load(root + "/assets"))
+        TraceLog(LOG_WARNING, "CodeLens: fonts not found in %s/assets", root.c_str());
     if (memory_preview) {
         run_memory_preview(root);
         fonts_unload();
@@ -44,40 +46,44 @@ int main(int argc, char** argv) {
     app.progress = progress_load(app.progress_path());
     app.screen = std::ifstream(app.welcome_path()) ? Screen::Course : Screen::Welcome;
     app.load_steps();
-    const char* ai_host=std::getenv("CODELENS_OLLAMA_HOST");
-    const char* ai_port=std::getenv("CODELENS_OLLAMA_PORT");
-    ai_init(ai_host?ai_host:"127.0.0.1",ai_port?std::atoi(ai_port):11434);
+    const char *ai_host = std::getenv("CODELENS_OLLAMA_HOST");
+    const char *ai_port = std::getenv("CODELENS_OLLAMA_PORT");
+    ai_init(ai_host ? ai_host : "127.0.0.1", ai_port ? std::atoi(ai_port) : 11434);
     tutor_refresh();
-    RenderTexture2D backdrop=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
-    SetExitKey(KEY_NULL);   // Esc is used for "back"
+    ModalBackdrop backdrop;
+    SetExitKey(KEY_NULL); // Esc is used for "back"
     while (!WindowShouldClose()) {
-        auto tutor=tutor_status();
-        if(app.screen==Screen::Course&&!app.ai_setup_checked&&tutor.checked){
-            app.ai_setup_checked=true;
-            if(!tutor.server||!tutor.installed)app.screen=Screen::AiSetup;
+        auto tutor = tutor_status();
+        if (app.screen == Screen::Course && !app.ai_setup_checked && tutor.checked) {
+            app.ai_setup_checked = true;
+            if (!tutor.server || !tutor.installed)
+                app.screen = Screen::AiSetup;
         }
         ui_begin_frame();
-        if(backdrop.texture.width!=GetScreenWidth()||backdrop.texture.height!=GetScreenHeight()){UnloadRenderTexture(backdrop);backdrop=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());}
-        if (!app.tutor.visible) {
-            BeginTextureMode(backdrop);
-            ClearBackground(theme::bg);
-            if (app.screen == Screen::Welcome) draw_welcome_screen(app);
-            else if (app.screen == Screen::AiSetup) draw_ai_setup_screen(app);
-            else if (app.screen == Screen::Course) draw_course_screen(app);
-            else app.steps.update_and_draw(app);
-            EndTextureMode();
-        }
         BeginDrawing();
         ClearBackground(theme::bg);
-        DrawTextureRec(backdrop.texture,{0,0,(float)backdrop.texture.width,-(float)backdrop.texture.height},{0,0},WHITE);
+        if (!app.tutor.visible) {
+            if (app.screen == Screen::Welcome)
+                draw_welcome_screen(app);
+            else if (app.screen == Screen::AiSetup)
+                draw_ai_setup_screen(app);
+            else if (app.screen == Screen::Course)
+                draw_course_screen(app);
+            else
+                app.steps.update_and_draw(app);
+            if (app.tutor.visible)
+                backdrop.capture();
+        } else
+            backdrop.draw();
         app.tutor.update_and_draw();
         EndDrawing();
         ui_end_frame();
     }
 
-    if (app.screen == Screen::Lesson) app.lesson.close(app);
+    if (app.screen == Screen::Lesson)
+        app.lesson.close(app);
     app.steps.shutdown();
-    UnloadRenderTexture(backdrop);
+    backdrop.release();
     fonts_unload();
     CloseWindow();
     return 0;

@@ -44,7 +44,7 @@ std::string goal(const Step &step) {
     case StepKind::Predict:
         return step.text.substr(0, step.text.find('\n'));
     case StepKind::Order:
-        return "Move the cards up or down to build the program, then choose Check.";
+        return "Drag the cards into order, then choose Check.";
     case StepKind::Choose:
         return step.text.substr(0, step.text.find('\n'));
     case StepKind::Explain:
@@ -97,6 +97,7 @@ void StepScreen::open(App &app, int index) {
         app.lesson.close(app);
     shutdown();
     loaded = false;
+    app.reconcile_steps();
     lesson_index = index;
     generated_task = false;
     completed.assign(app.lessons[index].steps.size(), false);
@@ -116,15 +117,18 @@ void StepScreen::enter(App &app, int index) {
     if (loaded && editing(app.lessons[lesson_index].steps[step_index].kind))
         app.lesson.close(app);
     debug_stop();
+    generated_task = false;
+    order_cards = {};
     step_index = index;
     loaded = true;
     debugging = notes = model_answer = submitted = explored = false;
-    text_scroll = code_scroll = 0;
+    text_scroll = code_scroll = feedback_scroll = 0;
     answer = {};
     explanation = {};
     verdict = {};
     error.clear();
     state = {};
+    picture.reset();
     actions.clear();
     choice = -1;
     explain_request = -1;
@@ -154,10 +158,21 @@ void StepScreen::enter(App &app, int index) {
 void StepScreen::mark_complete(App &app) {
     if (generated_task)
         return;
+    const std::string &id = app.lessons[lesson_index].id;
+    bool changed = !completed[step_index];
     completed[step_index] = true;
-    app.step_progress[app.lessons[lesson_index].id].insert(step_index);
+    app.step_progress[id].insert(step_index);
     furthest = std::max(furthest, std::min(step_index + 1, (int)completed.size() - 1));
-    app.save_steps();
+    bool all = std::all_of(completed.begin(), completed.end(), [](bool value) { return value; });
+    bool was_complete = app.progress.completed.count(id);
+    if (all)
+        app.progress.completed.insert(id);
+    else
+        app.progress.completed.erase(id);
+    if (was_complete != all)
+        progress_save(app.progress_path(), app.progress);
+    if (changed || was_complete != all)
+        app.save_steps();
 }
 void StepScreen::launch_debug(App &app, const std::string &operation) {
     if (job.valid())
@@ -231,6 +246,7 @@ void StepScreen::update_and_draw(App &app) {
     }
     app_busy = editing(s.kind) && app.lesson.busy();
     bool waiting = busy();
+    const bool navigation = !waiting && !order_cards.active();
     float w = GetScreenWidth(), h = GetScreenHeight(), m = 24;
     if (notes) {
         draw_text(g_fonts.title, 27, "Lesson notes — " + l.title, 32, 26, theme::text);
@@ -248,8 +264,10 @@ void StepScreen::update_and_draw(App &app) {
             app.tutor.open(l, app.lesson.editor.text(), "Lesson notes:\n" + text);
         return;
     }
-    if (button({m, 18, 120, 36}, "← Lessons", !waiting, ButtonStyle::Ghost) ||
-        (IsKeyPressed(KEY_ESCAPE) && !waiting)) {
+    if (button({m, 18, 120, 36}, "← Lessons", navigation, ButtonStyle::Ghost) ||
+        (IsKeyPressed(KEY_ESCAPE) && !waiting && !order_cards.active() &&
+         !(g_focus == Focus::Editor &&
+           ((editing(s.kind) && !debugging ? app.lesson.editor.has_selection() : code.has_selection()))))) {
         if (editing(s.kind))
             app.lesson.close(app);
         debug_stop();
@@ -264,7 +282,7 @@ void StepScreen::update_and_draw(App &app) {
                     (int)i == step_index ? theme::accent
                     : completed[i]       ? theme::success
                                          : theme::border);
-        if (!waiting && (completed[i] || (int)i <= furthest) &&
+        if (navigation && (completed[i] || (int)i <= furthest) &&
             CheckCollisionPointRec(GetMousePosition(), {p.x - 9, p.y - 12, 18, 24})) {
             ui_cursor_hand();
             if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && (int)i != step_index) {
@@ -273,8 +291,11 @@ void StepScreen::update_and_draw(App &app) {
             }
         }
     }
-    if (button({w - m - 164, 18, 164, 36}, "Ask the tutor", !waiting, ButtonStyle::Ghost))
-        app.tutor.open(generated_task ? app.lesson.task : l, editing(s.kind) ? app.lesson.editor.numbered_text() : code.numbered_text(), facts(s, state) + (editing(s.kind) ? "\nLatest result: " + app.lesson.last_error : ""));
+    if (button({w - m - 164, 18, 164, 36}, "Ask the tutor", navigation, ButtonStyle::Ghost))
+        app.tutor.open(generated_task ? app.lesson.task : l,
+                       editing(s.kind) ? app.lesson.editor.numbered_text() : code.numbered_text(),
+                       facts(s, state) +
+                           (editing(s.kind) ? "\nLatest result: " + app.lesson.last_error : ""));
     panel({m, 70, w - 2 * m, 125});
     draw_text(g_fonts.ui, 15,
               "Step " + std::to_string(step_index + 1) + " of " + std::to_string(l.steps.size()) + " · " +
@@ -285,7 +306,9 @@ void StepScreen::update_and_draw(App &app) {
     std::string terms = s.kind == StepKind::Practice ? "" : rest_of(s.text);
     if (terms.empty())
         terms = s.kind == StepKind::Watch
-                    ? "Next line runs the highlighted line. Step out finishes the current function call."
+                    ? "Next line runs the highlighted instruction. Restart starts this example again."
+                : s.kind == StepKind::Order
+                    ? "Drag a card to move it, or use the arrows. Check tests the whole order."
                 : editing(s.kind) && s.edit_from > 0 && !generated_task
                     ? "Dim lines are fixed. Edit the brighter lines; the editable area can grow."
                     : "";
@@ -298,8 +321,13 @@ void StepScreen::update_and_draw(App &app) {
             draw_text(g_fonts.ui, 14, line, m + 16, 150 + i * 19.0f, theme::text_dim);
         }
     }
-    Rectangle body{m, 211, w - 2 * m, h - 305};
     bool write = editing(s.kind) && !debugging;
+    std::string feedback = !error.empty() ? error : submitted ? verdict.feedback : "";
+    float feedback_height =
+        feedback.empty() || write
+            ? 0
+            : std::min(108.0f, 20.0f + 22.0f * wrap_text(g_fonts.ui, 17, feedback, w - 2 * m - 40).size());
+    Rectangle body{m, 211, w - 2 * m, h - 305 - (feedback_height ? feedback_height + 10 : 0)};
     if (write) {
         Rectangle taskarea = body;
         if (button({body.x, body.y, 145, 34}, "Lesson notes", !waiting, ButtonStyle::Ghost)) {
@@ -315,35 +343,16 @@ void StepScreen::update_and_draw(App &app) {
         }
 
         app.lesson.update_and_draw(app, taskarea);
-        if (app.lesson.just_completed && !generated_task && !completed[step_index])
+        if (app.lesson.just_completed && !generated_task)
             mark_complete(app);
     } else if (s.kind == StepKind::Order) {
         Rectangle cards = body;
         cards.width = std::min(880.0f, body.width);
         cards.x += (body.width - cards.width) / 2;
-        scroll_area(cards, order.size() * 58.0f, text_scroll);
-        BeginScissorMode(cards.x, cards.y, cards.width, cards.height);
-        for (size_t i = 0; i < order.size(); ++i) {
-            Rectangle r{cards.x, cards.y + i * 58 - text_scroll, cards.width, 50};
-            bool wrong = submitted && s.lines[order[i]] != s.lines[i];
-            DrawRectangleRounded(r, .1, 6, wrong ? theme::error_bg : theme::panel);
-            draw_text(g_fonts.mono, 16, fit_text(g_fonts.mono, 16, s.lines[order[i]], r.width - 140),
-                      r.x + 15, r.y + 16, theme::text);
-            if (button({r.x + r.width - 106, r.y + 7, 46, 36}, "↑",
-                       !waiting && i > 0 && CheckCollisionPointRec(GetMousePosition(), cards))) {
-                std::swap(order[i], order[i - 1]);
-                submitted = false;
-                verdict = {};
-            }
-            if (button({r.x + r.width - 54, r.y + 7, 46, 36}, "↓",
-                       !waiting && i + 1 < order.size() &&
-                           CheckCollisionPointRec(GetMousePosition(), cards))) {
-                std::swap(order[i], order[i + 1]);
-                submitted = false;
-                verdict = {};
-            }
+        if (order_cards.update_and_draw(cards, s.lines, order, submitted, !waiting, text_scroll)) {
+            submitted = false;
+            verdict = {};
         }
-        EndScissorMode();
     } else if (s.kind == StepKind::Choose) {
         float left = body.width * .43f;
         show_code(code, {body.x, body.y, left, body.height}, 0);
@@ -420,22 +429,33 @@ void StepScreen::update_and_draw(App &app) {
                 mark_complete(app);
             }
         } else if (s.kind == StepKind::Predict) {
-            draw_text(g_fonts.ui, 15, "Your prediction (a value, &name, or printed text)", left.x, y,
-                      theme::text_dim);
-            std::string previous_answer=answer.text;
-            text_input({left.x, y + 27, left.width, 38}, answer, "Type your answer");
-            if(answer.text!=previous_answer){submitted=false;verdict={};}
+            draw_text(g_fonts.ui, 15,
+                      s.predict_expr.empty() ? "Your prediction: what will the program print?"
+                                             : "Your prediction for " + s.predict_expr,
+                      left.x, y, theme::text_dim);
+            std::string previous_answer = answer.text;
+            text_input({left.x, y + 27, left.width, 38}, answer,
+                       s.predict_expr.empty() ? "Type the printed text" : "Type a value or a pointer target");
+            if (answer.text != previous_answer) {
+                submitted = false;
+                verdict = {};
+            }
             if (submitted)
                 draw_text(g_fonts.ui, 14, "The picture shows the measured result.", left.x, y + 78,
                           theme::text_dim);
         } else {
-            if (button({left.x, y, 110, 34}, "Step into", !waiting && !state.finished))
-                launch_debug(app, "into");
-            if (button({left.x + 118, y, 110, 34}, "Step out", !waiting && !state.finished))
-                launch_debug(app, "out");
-            if (button({left.x + 236, y, 100, 34}, "Restart", !waiting))
+            float control_x = left.x;
+            const bool functions = s.show >= ShowLevel::Frames;
+            if (functions) {
+                if (button({control_x, y, 110, 34}, "Step into", !waiting && !state.finished))
+                    launch_debug(app, "into");
+                if (button({control_x + 118, y, 110, 34}, "Step out", !waiting && !state.finished))
+                    launch_debug(app, "out");
+                control_x += 236;
+            }
+            if (button({control_x, y, 100, 34}, "Restart", !waiting))
                 launch_debug(app, "start");
-            if (debugging && button({left.x + 344, y, 135, 34}, "Back to code", !waiting)) {
+            if (debugging && button({control_x + 108, y, 135, 34}, "Back to code", !waiting)) {
                 debugging = false;
                 debug_stop();
                 return;
@@ -443,52 +463,38 @@ void StepScreen::update_and_draw(App &app) {
             if (!waiting && !state.finished) {
                 if (IsKeyPressed(KEY_F10))
                     launch_debug(app, "next");
-                if (IsKeyPressed(KEY_F11))
+                if (functions && IsKeyPressed(KEY_F11))
                     launch_debug(app,
                                  IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? "out" : "into");
             }
         }
-        panel(right);
-        auto area = panel_body(right, false);
         if ((exploring || submitted || s.kind == StepKind::Watch || debugging) && error.empty()) {
-            if (state.stack.empty() && state.heap.empty())
-                draw_wrapped(g_fonts.ui, 17,
-                             waiting          ? "Starting the program…"
-                             : state.finished ? "The program has finished. All function calls have returned."
-                                              : "No values yet. Run the next line to create the first box.",
-                             {area.x + 14, area.y + 20, area.width - 28, 80}, theme::text_dim);
-            else
-                draw_memory(state, {area.x, area.y, area.width, area.height - 55}, s.show);
-            if (!state.output.empty())
-                draw_text(g_fonts.mono, 15,
-                          fit_text(g_fonts.mono, 15, "Printed: " + state.output, area.width - 16), area.x + 8,
-                          area.y + area.height - 28, theme::success);
+            picture.update_and_draw(state, right, s.show, l.topic, waiting,
+                                    s.kind == StepKind::Predict ? s.predict_expr : "");
+            if (!state.note.empty() &&
+                button(ProgramView::why_button(right), "Why?", !waiting, ButtonStyle::Ghost)) {
+                app.tutor.open(l, code.numbered_text(), facts(s, state));
+                app.tutor.request = ai_chat(
+                    l, code.numbered_text(), facts(s, state),
+                    "Explain why the last action produced this measured result. Do not invent values.");
+            }
         } else
-            draw_wrapped(g_fonts.ui, 18,
-                         "Predict first. The real result will appear here after you choose Check.",
-                         {area.x + 18, area.y + 28, area.width - 36, 100}, theme::text_dim);
+            text_card(right,
+                      error.empty() ? "Make your prediction first. After Check, this picture will show what "
+                                      "the program actually did."
+                                    : error,
+                      theme::text_dim);
     }
     waiting = busy();
-    if (!error.empty())
-        text_card({m, h - 91, w - 2 * m - 210, 46}, "Could not run this step: " + error, theme::danger);
-    else if (submitted && !verdict.feedback.empty())
-        draw_text(g_fonts.ui, 14, fit_text(g_fonts.ui, 14, verdict.feedback, w - 2 * m - 330), m + 130,
-                  h - 46, verdict.correct ? theme::success : theme::text);
-    else if (!state.note.empty()) {
-        draw_text(g_fonts.ui, 15, fit_text(g_fonts.ui, 15, state.note, w - 2 * m - 420), m + 125, h - 47,
-                  theme::text);
+    if (feedback_height) {
+        Color color = !error.empty()                ? theme::danger
+                      : verdict.correct             ? theme::success
+                      : s.kind == StepKind::Explain ? theme::text
+                                                    : theme::warning;
+        text_card({m, h - 94 - feedback_height, w - 2 * m, feedback_height}, feedback, color,
+                  &feedback_scroll);
     }
-    if (!state.note.empty() &&
-        (s.kind == StepKind::Watch || s.kind == StepKind::Predict || s.kind == StepKind::Explore ||
-         debugging) &&
-        button({w - 330, h - 63, 80, 40}, "Why?", !waiting, ButtonStyle::Ghost)) {
-        app.tutor.open(l, code.text(), facts(s, state));
-        app.tutor.request =
-            ai_chat(l, code.text(), facts(s, state),
-                    "Explain why the last action produced this measured result. Do not invent any values.");
-    }
-    if (button({m, h - 63, 100, 40}, "← Back", step_index > 0 && !waiting,
-               ButtonStyle::Ghost)) {
+    if (button({m, h - 63, 100, 40}, "← Back", step_index > 0 && navigation, ButtonStyle::Ghost)) {
         enter(app, step_index - 1);
         return;
     }
@@ -509,7 +515,7 @@ void StepScreen::update_and_draw(App &app) {
         label = "Back to code";
     if (passed && step_index + 1 == (int)l.steps.size())
         label = "Finish lesson";
-    bool enabled = !waiting;
+    bool enabled = !waiting && !order_cards.active() && !order_cards.block_release;
     if (s.kind == StepKind::Explore)
         enabled = enabled && (explored || completed[step_index]);
     if (s.kind == StepKind::Predict && !passed)
@@ -578,8 +584,7 @@ void StepScreen::update_and_draw(App &app) {
         } else if (s.kind == StepKind::Explain) {
             submitted = true;
             verdict.correct = false;
-            verdict.feedback = "Compare your explanation with the model answer. Did you mention copies, "
-                               "addresses and the caller's values?";
+            verdict.feedback = "Compare your explanation with the model answer. Key ideas: " + s.rubric;
             if (ai_available())
                 explain_request = ai_chat(
                     l, s.code,
@@ -589,8 +594,7 @@ void StepScreen::update_and_draw(App &app) {
         }
     }
     if (write && app.lesson.just_completed) {
-        if (button({w - m - 385, h - 63, 185, 40}, "More practice",
-                   !waiting && ai_available())) {
+        if (button({w - m - 385, h - 63, 185, 40}, "More practice", !waiting && ai_available())) {
             Lesson original = l;
             generated_job = std::async(std::launch::async, [original] {
                 std::string error;

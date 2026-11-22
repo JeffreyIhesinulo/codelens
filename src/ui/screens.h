@@ -1,6 +1,8 @@
 #pragma once
 #include "app.h"
 #include "editor.h"
+#include "order_cards.h"
+#include "program_view.h"
 #include "ui.h"
 #include "tutor.h"
 
@@ -76,18 +78,21 @@ struct StepScreen {
     int furthest = 0;
     float text_scroll = 0;
     float code_scroll = 0;
+    float feedback_scroll = 0;
     std::vector<bool> completed;
     CodeEditor code;
     TextInput answer;
     TextArea explanation;
     Verdict verdict;
     std::vector<int> order;
+    OrderCards order_cards;
     int choice = -1;
     bool submitted = false, model_answer = false, debugging = false, notes = false;
     bool loaded = false, explored = false;
     Scene scene;
     std::vector<std::string> actions;
     ProgramState state;
+    ProgramView picture;
     struct Result {
         ProgramState state;
         Verdict verdict;
@@ -123,12 +128,14 @@ struct App {
     float course_scroll = 0;
     std::string welcome_error;
     std::map<std::string, std::set<int>> step_progress;
+    std::map<std::string, std::vector<std::string>> saved_step_keys;
     int resume_lesson = 0, resume_step = 0;
     bool ai_setup_checked = false;
 
     std::string progress_path() const { return root + "/progress.txt"; }
     std::string welcome_path() const { return root + "/welcome.txt"; }
     void load_steps();
+    void reconcile_steps();
     void save_steps() const;
     std::string draft_path(const Lesson &l) const {
         return root + "/drafts/" + l.id + (l.lang == Lang::C ? ".c" : ".cpp");

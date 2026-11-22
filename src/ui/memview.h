@@ -8,4 +8,5 @@ using ShowLevel = ::ShowLevel;
 }
 
 // The developer preview defaults to all details. Student views pass an explicit level.
-void draw_memory(const ProgramState& state, Rectangle area, ui::ShowLevel level = ui::ShowLevel::Heap);
+void draw_memory(const ProgramState& state, Rectangle area, ui::ShowLevel level = ui::ShowLevel::Heap,
+                 uint64_t highlighted_address = 0);

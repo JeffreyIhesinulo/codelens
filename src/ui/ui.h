@@ -57,6 +57,14 @@ void ui_end_frame();     // applies the mouse cursor shape
 void ui_cursor_hand();
 void ui_cursor_ibeam();
 
+// Freeze the screen behind a modal at the window's native pixel resolution.
+struct ModalBackdrop {
+    Texture2D texture{};
+    void capture();
+    void draw() const;
+    void release();
+};
+
 enum class ButtonStyle { Normal, Primary, Ghost };
 bool button(Rectangle r, const std::string& label, bool enabled = true, ButtonStyle style = ButtonStyle::Normal);
 bool slider(Rectangle r, const std::string& label, int& value, int min, int max);

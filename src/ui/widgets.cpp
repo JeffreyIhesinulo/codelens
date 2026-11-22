@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "rlgl.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,7 +25,9 @@ static std::vector<int> codepoints() {
 
 static Font load(const std::string& path, float size) {
     std::vector<int> cps = codepoints();
-    Font f = LoadFontEx(path.c_str(), (int)size, cps.data(), (int)cps.size());
+    Vector2 dpi = GetWindowScaleDPI();
+    float raster_scale = std::max(1.0f, std::max(dpi.x, dpi.y));
+    Font f = LoadFontEx(path.c_str(), (int)std::ceil(size * raster_scale * 1.5f), cps.data(), (int)cps.size());
     SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
     return f;
 }
@@ -142,6 +145,25 @@ void ui_end_frame() {
 
 void ui_cursor_hand()  { g_want_hand = true; }
 void ui_cursor_ibeam() { g_want_ibeam = true; }
+
+void ModalBackdrop::capture() {
+    rlDrawRenderBatchActive();
+    Image pixels = LoadImageFromScreen();
+    Texture2D next = LoadTextureFromImage(pixels);
+    UnloadImage(pixels);
+    release();
+    texture = next;
+    if (texture.id) SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+}
+void ModalBackdrop::draw() const {
+    if (texture.id)
+        DrawTexturePro(texture, {0, 0, (float)texture.width, (float)texture.height},
+                       {0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0, 0}, 0, WHITE);
+}
+void ModalBackdrop::release() {
+    if (texture.id) UnloadTexture(texture);
+    texture = {};
+}
 
 bool key_pressed(int key) { return IsKeyPressed(key) || IsKeyPressedRepeat(key); }
 

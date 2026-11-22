@@ -96,6 +96,8 @@ void LessonScreen::start_run(App& app) {
 
     console.clear();
     console_scroll = 0;
+    details.clear();
+    show_details = false;
     print("Compiling and running…", theme::text_dim, false);
     if (!input.empty()) print("Input (from the first test):\n" + input, theme::text_dim);
     std::string code = editor.text();
@@ -108,6 +110,8 @@ void LessonScreen::start_check(App& app) {
     close(app);
     console.clear();
     console_scroll = 0;
+    details.clear();
+    show_details = false;
     print("Running the tests…", theme::text_dim, false);
     Lesson l = task;
     std::string code = editor.text();
@@ -117,7 +121,14 @@ void LessonScreen::start_check(App& app) {
 // Reports compile errors / crashes / memory errors. Returns true if there was a problem.
 static bool report_problems(LessonScreen& s, const RunResult& r) {
     s.editor.error_lines.clear();
-    s.details = r.compile_errors + "\n" + r.stderr_text;
+    s.details.clear();
+    for (const auto& diagnostic : {r.compile_errors, r.stderr_text}) {
+        const auto first = diagnostic.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) continue;
+        const auto last = diagnostic.find_last_not_of(" \t\r\n");
+        if (!s.details.empty()) s.details += "\n\n";
+        s.details += diagnostic.substr(first, last - first + 1);
+    }
     s.show_details = false;
     for (const auto& e : r.friendly) {
         s.console.push_back({e.message, e.warning ? theme::warning : theme::danger, false});
@@ -155,6 +166,7 @@ void LessonScreen::poll_jobs(App& app) {
     if (ready(run_job)) {
         RunResult r = run_job.get();
         console.clear();
+        console_scroll = 0;
         last_error.clear();
         if (r.compiled) {
             print(r.output.empty() ? "(no output)" : r.output, r.output.empty() ? theme::text_dim : theme::text);
@@ -167,6 +179,9 @@ void LessonScreen::poll_jobs(App& app) {
         TestResult t = check_job.get();
         const Lesson& l = task;
         console.clear();
+        console_scroll = 0;
+        details.clear();
+        show_details = false;
         last_error.clear();
         if (t.total > 0 && t.passed == t.total) {
             editor.error_lines.clear();
@@ -274,7 +289,10 @@ void LessonScreen::draw_console(Rectangle r) {
     panel(r, "Console");
     Rectangle body = panel_body(r, true);
     if (!details.empty()) {
-        if (button({r.x+r.width-125,r.y+2,123,29},show_details?"Hide details":"Show details",true,ButtonStyle::Ghost)) show_details=!show_details;
+        if (button({r.x+r.width-125,r.y+2,123,29},show_details?"Hide details":"Show details",true,ButtonStyle::Ghost)) {
+            show_details = !show_details;
+            console_scroll = 0;
+        }
     }
     body.width -= 8;
     float lh_mono = g_fonts.mono_size + 4, lh_ui = g_fonts.ui_size + 5;
@@ -290,6 +308,7 @@ void LessonScreen::draw_console(Rectangle r) {
     if (show_details) for(const auto& line:wrap_text(g_fonts.mono,g_fonts.mono_size,details,body.width)) rows.push_back({line,theme::text_dim,true});
     float h = 0;
     for (const Row& row : rows) h += row.mono ? lh_mono : lh_ui;
+    scroll_area(body, h + 10, console_scroll);
 
     BeginScissorMode((int)body.x, (int)body.y - 4, (int)body.width + 4, (int)body.height + 8);
     float y = body.y - console_scroll;
@@ -303,7 +322,6 @@ void LessonScreen::draw_console(Rectangle r) {
         draw_text(g_fonts.ui, g_fonts.ui_size, std::string(dots, '.'), body.x, y, theme::text_dim);
     }
     EndScissorMode();
-    scroll_area(body, h + 10, console_scroll);
 }
 
 void LessonScreen::draw_ai(App&, Rectangle r) {
@@ -397,6 +415,9 @@ void LessonScreen::update_and_draw(App& app, Rectangle area) {
         editor.set_text(l.starter_code);
         editor.lock_template(l.starter_code, edit_from, edit_to);
         console.clear();
+        console_scroll = 0;
+        details.clear();
+        show_details = false;
         print("Code reset to the starting template.", theme::text_dim, false);
     }
     if (ctrl && IsKeyPressed(KEY_ENTER) && !busy())
