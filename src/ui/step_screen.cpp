@@ -260,7 +260,7 @@ void StepScreen::update_and_draw(App &app) {
             notes = false;
             text_scroll = 0;
         }
-        if (button({w - 190, 20, 158, 36}, "Ask the tutor", true, ButtonStyle::Ghost))
+        if (button({w - 190, 20, 158, 36}, "Ask the tutor", true, ButtonStyle::Soft))
             app.tutor.open(l, app.lesson.editor.text(), "Lesson notes:\n" + text);
         return;
     }
@@ -291,12 +291,14 @@ void StepScreen::update_and_draw(App &app) {
             }
         }
     }
-    if (button({w - m - 164, 18, 164, 36}, "Ask the tutor", navigation, ButtonStyle::Ghost))
+    if (button({w - m - 164, 18, 164, 36}, "Ask the tutor", navigation, ButtonStyle::Soft))
         app.tutor.open(generated_task ? app.lesson.task : l,
                        editing(s.kind) ? app.lesson.editor.numbered_text() : code.numbered_text(),
                        facts(s, state) +
                            (editing(s.kind) ? "\nLatest result: " + app.lesson.last_error : ""));
-    panel({m, 70, w - 2 * m, 125});
+    // instruction card: tinted so the "what to do now" sentence stands out
+    DrawRectangleRounded({m, 70, w - 2 * m, 125}, 0.08f, 8, theme::accent_soft);
+    DrawRectangleRoundedLinesEx({m, 70, w - 2 * m, 125}, 0.08f, 8, 1, theme::accent_dk);
     draw_text(g_fonts.ui, 15,
               "Step " + std::to_string(step_index + 1) + " of " + std::to_string(l.steps.size()) + " · " +
                   name(s.kind),

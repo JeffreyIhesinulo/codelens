@@ -10,7 +10,7 @@ void draw_course_screen(App &app) {
         tutor_refresh();
         app.screen = Screen::AiSetup;
     }
-    if (button({w - 190, 24, 158, 36}, "Ask the tutor", true, ButtonStyle::Ghost)) {
+    if (button({w - 190, 24, 158, 36}, "Ask the tutor", true, ButtonStyle::Soft)) {
         Lesson l;
         l.title = "Learning path";
         app.tutor.open(l, "",

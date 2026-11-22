@@ -49,7 +49,7 @@ void draw_ai_setup_screen(App &app) {
         app.screen = Screen::Course;
         app.ai_setup_checked = true;
     }
-    if (button({24, 18, 160, 34}, "Ask the tutor", true, ButtonStyle::Ghost)) {
+    if (button({24, 18, 160, 34}, "Ask the tutor", true, ButtonStyle::Soft)) {
         Lesson l;
         l.title = "Tutor setup";
         app.tutor.open(l, "", "The student is setting up Ollama.");
