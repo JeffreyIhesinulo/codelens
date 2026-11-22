@@ -5,28 +5,31 @@
 #include <vector>
 
 // ---------------------------------------------------------------- theme
+// "Violet night" palette (22 Nov 2026), taken from the team's Figma mock-up.
 namespace theme {
-inline const Color bg        = {24, 26, 31, 255};
-inline const Color panel     = {32, 35, 42, 255};
-inline const Color panel_hi  = {40, 44, 53, 255};
-inline const Color border    = {52, 57, 68, 255};
-inline const Color text      = {220, 223, 228, 255};
-inline const Color text_dim  = {140, 147, 160, 255};
-inline const Color accent    = {97, 175, 239, 255};
-inline const Color accent_dk = {48, 88, 128, 255};
-inline const Color success   = {120, 200, 120, 255};
-inline const Color danger    = {235, 110, 110, 255};
-inline const Color warning   = {229, 192, 123, 255};
-inline const Color error_bg  = {90, 40, 44, 255};
-inline const Color line_hi   = {38, 42, 50, 255};
+inline const Color bg        = {13, 14, 20, 255};
+inline const Color panel     = {21, 22, 31, 255};
+inline const Color panel_hi  = {30, 31, 44, 255};
+inline const Color border    = {42, 43, 60, 255};
+inline const Color text      = {232, 232, 242, 255};
+inline const Color text_dim  = {140, 141, 166, 255};
+inline const Color accent    = {167, 139, 250, 255};
+inline const Color accent_dk = {70, 52, 128, 255};
+inline const Color accent_hover = {94, 70, 170, 255};
+inline const Color accent_soft = {36, 28, 62, 255};    // tinted cards and the tutor button
+inline const Color success   = {52, 211, 153, 255};
+inline const Color danger    = {248, 113, 113, 255};
+inline const Color warning   = {245, 196, 94, 255};
+inline const Color error_bg  = {84, 30, 42, 255};
+inline const Color line_hi   = {26, 27, 38, 255};
 // syntax
-inline const Color kw        = {198, 120, 221, 255};
-inline const Color type      = {229, 192, 123, 255};
-inline const Color str       = {152, 195, 121, 255};
-inline const Color num       = {209, 154, 102, 255};
-inline const Color comment   = {110, 118, 130, 255};
-inline const Color preproc   = {224, 108, 117, 255};
-inline const Color func      = {97, 175, 239, 255};
+inline const Color kw        = {192, 132, 252, 255};
+inline const Color type      = {125, 211, 252, 255};
+inline const Color str       = {134, 239, 172, 255};
+inline const Color num       = {251, 146, 60, 255};
+inline const Color comment   = {102, 106, 134, 255};
+inline const Color preproc   = {232, 121, 249, 255};
+inline const Color func      = {96, 165, 250, 255};
 }
 
 // ---------------------------------------------------------------- fonts
@@ -65,7 +68,7 @@ struct ModalBackdrop {
     void release();
 };
 
-enum class ButtonStyle { Normal, Primary, Ghost };
+enum class ButtonStyle { Normal, Primary, Ghost, Soft };   // Soft: tinted, for "Ask the tutor"
 bool button(Rectangle r, const std::string& label, bool enabled = true, ButtonStyle style = ButtonStyle::Normal);
 bool slider(Rectangle r, const std::string& label, int& value, int min, int max);
 int action_buttons(Rectangle r, const std::vector<std::string>& labels, int selected = -1);  // clicked index, or -1

@@ -6,7 +6,7 @@ void draw_welcome_screen(App &app) {
     const float width = 700;
     const float x = (GetScreenWidth() - width) / 2;
     const float y = (GetScreenHeight() - 380) / 2.0f;
-    if (button({GetScreenWidth() - 192.0f, 20, 164, 36}, "Ask the tutor", true, ButtonStyle::Ghost)) {
+    if (button({GetScreenWidth() - 192.0f, 20, 164, 36}, "Ask the tutor", true, ButtonStyle::Soft)) {
         Lesson context;
         context.title = "Welcome to CodeLens";
         context.theory = "Explore means trying an interactive example. Understand means following "

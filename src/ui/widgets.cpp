@@ -32,11 +32,20 @@ static Font load(const std::string& path, float size) {
     return f;
 }
 
+// Inter (UI) and JetBrains Mono (code); DejaVu stays as a fallback if a file is missing.
+static Font load_first(const std::string& dir, std::initializer_list<const char*> names, float size) {
+    for (const char* n : names) {
+        std::string path = dir + "/fonts/" + n;
+        if (FileExists(path.c_str())) return load(path, size);
+    }
+    return GetFontDefault();
+}
+
 bool fonts_load(const std::string& dir) {
-    g_fonts.ui      = load(dir + "/fonts/DejaVuSans.ttf",      g_fonts.ui_size);
-    g_fonts.ui_bold = load(dir + "/fonts/DejaVuSans-Bold.ttf", g_fonts.ui_size);
-    g_fonts.title   = load(dir + "/fonts/DejaVuSans-Bold.ttf", g_fonts.title_size);
-    g_fonts.mono    = load(dir + "/fonts/DejaVuSansMono.ttf",  g_fonts.mono_size);
+    g_fonts.ui      = load_first(dir, {"Inter-Regular.ttf", "DejaVuSans.ttf"}, g_fonts.ui_size);
+    g_fonts.ui_bold = load_first(dir, {"Inter-SemiBold.ttf", "DejaVuSans-Bold.ttf"}, g_fonts.ui_size);
+    g_fonts.title   = load_first(dir, {"Inter-Bold.ttf", "DejaVuSans-Bold.ttf"}, g_fonts.title_size);
+    g_fonts.mono    = load_first(dir, {"JetBrainsMono-Regular.ttf", "DejaVuSansMono.ttf"}, g_fonts.mono_size);
     return g_fonts.ui.glyphCount > 95 && g_fonts.mono.glyphCount > 95;
 }
 
@@ -177,7 +186,9 @@ bool button(Rectangle r, const std::string& label, bool enabled, ButtonStyle sty
     Color fill = theme::panel_hi, fg = theme::text, line = theme::border;
     if (style == ButtonStyle::Primary) { fill = theme::accent_dk; line = theme::accent; }
     if (style == ButtonStyle::Ghost)   { fill = {0, 0, 0, 0}; line = {0, 0, 0, 0}; }
-    if (hover) fill = style == ButtonStyle::Primary ? Color{60, 108, 156, 255} : theme::border;
+    if (style == ButtonStyle::Soft)    { fill = theme::accent_soft; line = theme::accent_dk; }
+    if (hover) fill = style == ButtonStyle::Primary ? theme::accent_hover
+                    : style == ButtonStyle::Soft    ? theme::accent_dk : theme::border;
     if (down)  fill = theme::accent_dk;
     if (!enabled) { fg = theme::text_dim; fill = theme::panel; }
 
