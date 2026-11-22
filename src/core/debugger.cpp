@@ -606,6 +606,23 @@ void Session::fill_heap_cells() {
                 std::vector<std::string> parts = n == 1
                     ? std::vector<std::string>{eval("*(" + v.name + ")", level)}
                     : split_aggregate(eval("*(" + v.name + ")@" + std::to_string(n), level));
+                // a single struct (a list node): its fields become the cells, "value" and "next"
+                if (n == 1 && parts.size() == 1 && !parts[0].empty() && parts[0][0] == '{' &&
+                    elem_type.find('[') == std::string::npos) {
+                    for (const std::string& part : split_aggregate(parts[0])) {
+                        size_t eq = part.find(" = ");
+                        if (eq == std::string::npos) continue;
+                        Variable c;
+                        c.name = part.substr(0, eq);
+                        c.value = part.substr(eq + 3);
+                        std::string field = "(*(" + v.name + "))." + c.name;
+                        c.address = first_hex(eval("&(" + field + ")", level));
+                        c.type = type_of(field, level);
+                        if (!c.type.empty() && c.type.back() == '*') { c.is_pointer = true; c.points_to = first_hex(c.value); }
+                        h.cells.push_back(c);
+                    }
+                    if (!h.cells.empty()) break;
+                }
                 for (size_t i = 0; i < parts.size(); ++i) {
                     Variable c;
                     c.name = "[" + std::to_string(i) + "]";

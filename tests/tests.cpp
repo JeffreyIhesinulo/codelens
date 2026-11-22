@@ -769,6 +769,29 @@ static bool said(const std::vector<std::string>& notes, const std::string& part)
     return false;
 }
 
+TEST(test_linked_list_narration) {
+    std::vector<std::string> n = narrate(
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "struct node { int value; struct node *next; };\n"
+        "int main(void) {\n"
+        "    struct node *tail = malloc(sizeof(struct node));\n"
+        "    tail->value = 2;\n"
+        "    tail->next = NULL;\n"
+        "    struct node *head = malloc(sizeof(struct node));\n"
+        "    head->value = 1;\n"
+        "    head->next = tail;\n"
+        "    printf(\"\\n\");\n"
+        "    free(head);\n"
+        "    free(tail);\n"
+        "    return 0;\n"
+        "}\n", "", false);
+    CHECK(said(n, "Line 6: tail->value changed from"));
+    CHECK(said(n, "Line 9: head->value changed from"));
+    CHECK(said(n, "Line 10: head->next now points to heap block 1."));
+    CHECK(said(n, "printed a line break"));
+}
+
 TEST(test_step_narration) {
     std::vector<std::string> n = narrate(
         "#include <stdio.h>\n"
@@ -872,6 +895,7 @@ int main() {
     RUN(test_lesson_v3_format);
     RUN(test_order_and_choose);
     RUN(test_step_narration);
+    RUN(test_linked_list_narration);
     RUN(test_hidden_until_declared);
 
     std::printf("\n%d passed, %d failed\n", g_passed, g_failed);

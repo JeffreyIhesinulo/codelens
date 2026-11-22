@@ -18,6 +18,7 @@ std::string show_value(const ProgramState& s, const Variable& v) {
         size_t q = v.value.find(" \"");   // char *: 0x55... "hello"
         if (q != std::string::npos) return v.value.substr(q + 1);
         std::string target = state_describe_address(s, v.points_to);
+        if (target.rfind("heap block", 0) == 0) return target;   // not "&heap block 1"
         return target.empty() ? "an address" : "&" + target;
     }
     std::smatch m;
@@ -215,13 +216,16 @@ std::string describe_step(const ProgramState& before, const ProgramState& after,
         if (h.cells.size() != hb.cells.size()) continue;
         // a write into the block: name it after a pointer to it ("p[0]"), or after the block
         std::string base = "heap block " + std::to_string(i + 1);
-        for (auto f = after.stack.rbegin(); f != after.stack.rend() && base[0] == 'h'; ++f)
+        bool named = false;
+        for (auto f = after.stack.rbegin(); f != after.stack.rend() && !named; ++f)
             for (const Variable& v : f->vars)
-                if (v.is_pointer && v.points_to == h.address) { base = v.name; break; }
-        for (size_t c = 0; c < h.cells.size(); ++c)
-            if (h.cells[c].value != hb.cells[c].value)
-                facts.push_back(base + h.cells[c].name + " changed from " + show_value(before, hb.cells[c]) +
-                                " to " + show_value(after, h.cells[c]));
+                if (v.is_pointer && v.points_to == h.address) { base = v.name; named = true; break; }
+        // a struct node on the heap has its fields as cells: "head->value", "head->next"
+        for (size_t c = 0; c < h.cells.size(); ++c) {
+            const std::string& cn = h.cells[c].name;
+            std::string sub = cn[0] == '[' ? base + cn : (named ? base + "->" + cn : cn + " in " + base);
+            diff_var(before, after, hb.cells[c], h.cells[c], sub, "", facts);
+        }
     }
 
     // output
@@ -230,7 +234,7 @@ std::string describe_step(const ProgramState& before, const ProgramState& after,
         while (!printed.empty() && printed.back() == '\n') printed.pop_back();
         for (char& c : printed) if (c == '\n') c = ' ';
         if (printed.size() > 60) printed = printed.substr(0, 57) + "...";
-        facts.push_back("printed \"" + printed + "\"");
+        facts.push_back(printed.empty() ? "printed a line break" : "printed \"" + printed + "\"");
     }
 
     std::string control = control_fact(lines, line, after.line, ad == bd,
