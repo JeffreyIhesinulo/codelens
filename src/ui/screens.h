@@ -19,11 +19,6 @@ struct ConsoleLine {
     bool mono = true;
 };
 
-struct ChatMessage {
-    bool from_ai;
-    std::string text;
-};
-
 struct LessonScreen {
     int lesson_index = -1;
     Lesson task;
