@@ -1,0 +1,291 @@
+@id     06_lists
+@title  Linked lists
+@topic  lists
+@lang   c
+@show   heap
+
+@theory
+A linked list is a chain of boxes called nodes. Each node holds a value and the
+address of the next node. The last node holds NULL: there is no next node.
+
+    struct node {
+        int value;
+        struct node *next;   // address of the next node, or NULL
+    };
+
+Nodes are reserved with malloc, so the list can grow while the program runs.
+head points to the first node. To visit every node, start at head and follow next
+until you reach NULL:
+
+    for (struct node *p = head; p != NULL; p = p->next)
+        printf("%d ", p->value);
+
+p->value means "the value field of the node that p points to".
+Every node reserved with malloc must be given back with free.
+
+Your task: the program reads n (1..100) and then n integers. Each number is added
+to the front of the list, so the list holds them in reverse order. Print the values
+of the list from head to the end, separated by spaces.
+
+Input:   3
+         1 2 3
+Output:  3 2 1
+
+@starter
+#include <stdio.h>
+#include <stdlib.h>
+
+struct node {
+    int value;
+    struct node *next;
+};
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+
+    struct node *head = NULL;
+    for (int i = 0; i < n; i++) {
+        struct node *fresh = malloc(sizeof(struct node));
+        scanf("%d", &fresh->value);
+        fresh->next = head;
+        head = fresh;
+    }
+
+    // print every value from head to the end
+
+    printf("\n");
+    while (head != NULL) {
+        struct node *after = head->next;
+        free(head);
+        head = after;
+    }
+    return 0;
+}
+
+@solution
+#include <stdio.h>
+#include <stdlib.h>
+
+struct node {
+    int value;
+    struct node *next;
+};
+
+int main(void) {
+    int n;
+    scanf("%d", &n);
+
+    struct node *head = NULL;
+    for (int i = 0; i < n; i++) {
+        struct node *fresh = malloc(sizeof(struct node));
+        scanf("%d", &fresh->value);
+        fresh->next = head;
+        head = fresh;
+    }
+
+    for (struct node *p = head; p != NULL; p = p->next) {
+        printf("%d ", p->value);
+    }
+
+    printf("\n");
+    while (head != NULL) {
+        struct node *after = head->next;
+        free(head);
+        head = after;
+    }
+    return 0;
+}
+
+@test
+@input
+3
+1 2 3
+@expected
+3 2 1
+
+@test
+@input
+1
+42
+@expected
+42
+
+@hidden_test
+@input
+5
+-1 0 7 7 10
+@expected
+10 7 7 0 -1
+
+#! ------------------------------------------------------------------
+#! Steps: Explore -> Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step explore
+@title  Reserve a box
+@scene  heap
+@text
+Press malloc, then free(p), and watch the reserved boxes appear and disappear.
+malloc reserves memory while the program runs. Every node of a linked list is reserved this way.
+
+@step watch
+@title  Watch a list being built
+@code
+#include <stdio.h>
+#include <stdlib.h>
+
+struct node {
+    int value;
+    struct node *next;
+};
+
+int main(void) {
+    struct node *third = malloc(sizeof(struct node));
+    third->value = 30;
+    third->next = NULL;
+
+    struct node *second = malloc(sizeof(struct node));
+    second->value = 20;
+    second->next = third;
+
+    struct node *head = malloc(sizeof(struct node));
+    head->value = 10;
+    head->next = second;
+
+    for (struct node *p = head; p != NULL; p = p->next) {
+        printf("%d ", p->value);
+    }
+    printf("\n");
+
+    free(head);
+    free(second);
+    free(third);
+    return 0;
+}
+@text
+Press Next line and watch three nodes appear and link up.
+Each node holds a value and the address of the next node. The last one holds NULL. Then the loop follows next from node to node.
+
+@step predict
+@title  Follow two arrows
+@code
+#include <stdio.h>
+#include <stdlib.h>
+
+struct node {
+    int value;
+    struct node *next;
+};
+
+int main(void) {
+    struct node *b = malloc(sizeof(struct node));
+    b->value = 7;
+    b->next = NULL;
+    struct node *a = malloc(sizeof(struct node));
+    a->value = 4;
+    a->next = b;
+    printf("%d\n", a->next->value);
+    free(a);
+    free(b);
+    return 0;
+}
+@line   16
+@expr   a->next->value
+@text
+What is a->next->value after line 16 runs?
+a->next is the node that a points to next. Then take its value.
+
+@step choose
+@title  The end of the list
+@code
+for (struct node *p = head; p != NULL; p = p->next)
+@text
+How does this loop know that it has reached the end of the list?
+@option The last node's next is NULL
+@option The list has 10 nodes
+@option p becomes 0 after printing
+@option malloc returns NULL
+@correct 1
+@answer
+The last node holds NULL in next. When p becomes NULL, p != NULL is false and the loop stops.
+
+@step order
+@title  Put the walk in order
+@text
+Put the lines in order so the program prints every value of the list.
+Start at head, print the value, then move to the next node.
+@code
+for (struct node *p = head; p != NULL; p = p->next) {
+    printf("%d ", p->value);
+}
+printf("\n");
+
+@step find_bug
+@title  Find the bug
+@text
+Fix the loop so it also prints the last node.
+Right now it stops one node early: it prints 1 2 instead of 1 2 3.
+@starter
+#include <stdio.h>
+#include <stdlib.h>
+
+struct node {
+    int value;
+    struct node *next;
+};
+
+int main(void) {
+    struct node nodes[3] = {{1, NULL}, {2, NULL}, {3, NULL}};
+    nodes[0].next = &nodes[1];
+    nodes[1].next = &nodes[2];
+    struct node *head = &nodes[0];
+
+    struct node *p = head;
+    while (p->next != NULL) {
+        printf("%d ", p->value);
+        p = p->next;
+    }
+    printf("\n");
+    return 0;
+}
+@editable 16-16
+@solution
+#include <stdio.h>
+#include <stdlib.h>
+
+struct node {
+    int value;
+    struct node *next;
+};
+
+int main(void) {
+    struct node nodes[3] = {{1, NULL}, {2, NULL}, {3, NULL}};
+    nodes[0].next = &nodes[1];
+    nodes[1].next = &nodes[2];
+    struct node *head = &nodes[0];
+
+    struct node *p = head;
+    while (p != NULL) {
+        printf("%d ", p->value);
+        p = p->next;
+    }
+    printf("\n");
+    return 0;
+}
+@test
+@expected
+1 2 3
+
+@step explain
+@title  Explain it
+@text
+Why does every linked list end with a node whose next is NULL?
+@rubric
+NULL; end; last; stop
+@answer
+NULL means "no next node". The loop that walks the list stops when it reaches NULL,
+so without it the program would follow an address that does not belong to the list.
+
+@step practice
+@title  Practice
