@@ -337,38 +337,8 @@ void LessonScreen::draw_ai(App&, Rectangle r) {
     float controls_h = 36 + 8 + 36;
     Rectangle msgs = {body.x, body.y, body.width - 8, body.height - controls_h - 12};
 
-    // ---- messages
-    const float pad = 10, gap = 10;
-    float bubble_w = msgs.width - 20;
-    std::vector<std::vector<std::string>> wrapped;
-    float total = 0;
-    for (const ChatMessage& m : chat) {
-        wrapped.push_back(wrap_text(g_fonts.ui, g_fonts.ui_size, m.text, bubble_w - 2 * pad));
-        total += wrapped.back().size() * (g_fonts.ui_size + 5) + 2 * pad + gap;
-    }
-    if (ai_request >= 0) total += g_fonts.ui_size + 2 * pad + gap;
-    if (chat_stick_bottom) { chat_scroll = std::max(0.0f, total - msgs.height); chat_stick_bottom = false; }
-
-    BeginScissorMode((int)msgs.x, (int)msgs.y, (int)msgs.width + 4, (int)msgs.height);
-    float y = msgs.y - chat_scroll;
-    for (size_t i = 0; i < chat.size(); ++i) {
-        const ChatMessage& m = chat[i];
-        float h = wrapped[i].size() * (g_fonts.ui_size + 5) + 2 * pad;
-        float bx = m.from_ai ? msgs.x : msgs.x + 20;
-        DrawRectangleRounded({bx, y, bubble_w, h}, 0.12f, 6, m.from_ai ? theme::panel_hi : theme::accent_dk);
-        float ty = y + pad;
-        for (const std::string& line : wrapped[i]) {
-            draw_text(g_fonts.ui, g_fonts.ui_size, line, bx + pad, ty, theme::text);
-            ty += g_fonts.ui_size + 5;
-        }
-        y += h + gap;
-    }
-    if (ai_request >= 0) {
-        int dots = (int)(GetTime() * 3) % 4;
-        draw_text(g_fonts.ui, g_fonts.ui_size, "Thinking" + std::string(dots, '.'), msgs.x + pad, y + pad, theme::text_dim);
-    }
-    EndScissorMode();
-    scroll_area(msgs, total, chat_scroll);
+    // ---- messages (shared bubbles, see tutor.cpp)
+    draw_chat(msgs, chat, ai_request >= 0, chat_scroll, chat_stick_bottom);
 
     // ---- controls
     float cy = body.y + body.height - controls_h;
