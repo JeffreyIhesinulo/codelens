@@ -46,7 +46,7 @@ void LessonScreen::open(App& app, int index) {
     console.clear();
     console_scroll = theory_scroll = chat_scroll = 0;
     chat.clear();
-    chat.push_back({true, "Hi! I'm your tutor for \"" + l.title + "\". Press Run to try your code, Check to test it. "
+    chat.push_back({true, "Hi, I'm Bit, your tutor for \"" + l.title + "\". Press Run to try your code, Check to test it. "
                           "Stuck? Ask me a question or press Hint."});
     chat_stick_bottom = true;
     ai_request = -1;

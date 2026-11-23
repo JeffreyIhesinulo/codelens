@@ -5,6 +5,7 @@
 #include "program_view.h"
 #include "ui.h"
 #include "tutor.h"
+#include "mascot.h"
 
 #include <future>
 #include <map>
@@ -83,6 +84,10 @@ struct StepScreen {
     OrderCards order_cards;
     int choice = -1;
     bool submitted = false, model_answer = false, debugging = false, notes = false;
+    bool revealed = false;   // the student pressed Show answer after a wrong try
+    bool focus_answer = false;
+    bool reading = false;   // "Read the lesson" page is open
+    float reading_scroll = 0;
     bool loaded = false, explored = false;
     Scene scene;
     std::vector<std::string> actions;
@@ -126,6 +131,12 @@ struct App {
     std::map<std::string, std::vector<std::string>> saved_step_keys;
     int resume_lesson = 0, resume_step = 0;
     bool ai_setup_checked = false;
+    bool auto_reading = false;   // open "Read the lesson" when a lesson is started for the first time
+    bool guides = false;         // Bit the raccoon: tips, the tour and the lesson-complete card (off in tests)
+    Rewards rewards;
+    int tour_step = -1;          // first-run tour on the course screen; -1 = not showing
+    std::string celebration;     // title of the lesson just finished: show the reward card
+    int celebration_xp = 0;
 
     std::string progress_path() const { return root + "/progress.txt"; }
     std::string welcome_path() const { return root + "/welcome.txt"; }
@@ -139,4 +150,8 @@ struct App {
 
 void draw_course_screen(App &app);
 void draw_welcome_screen(App &app);
+void draw_celebration(App &app);   // "Lesson complete" card with XP and streak
+void draw_logo(float cx, float cy, float r, float alpha = 1);
+void draw_wordmark(float cx, float y, float size, float alpha = 1);
+bool draw_splash_screen(float t);   // true when finished
 void draw_ai_setup_screen(App &app);

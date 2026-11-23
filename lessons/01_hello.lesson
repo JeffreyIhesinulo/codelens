@@ -20,6 +20,34 @@ Your task: print exactly two lines:
 Hello, CodeLens!
 I am learning C.
 
+@read
+## What is a program?
+A program is a list of instructions. The computer runs them one by one, from top to bottom. In C, every program starts running at the first line inside main.
+
+    #include <stdio.h>
+
+    int main(void) {
+        printf("Hello!\n");
+        return 0;
+    }
+
+## The parts of this program
+- `#include <stdio.h>` lets the program use printf. stdio means "standard input and output".
+- `int main(void) { ... }` is where the program starts. Everything between { and } belongs to main.
+- `printf("Hello!\n");` prints the text between the quotes on the screen.
+- `return 0;` ends the program and tells the computer "everything went well".
+
+## Small details that matter
+- Every instruction ends with a semicolon `;`. Forgetting it is the most common beginner error.
+- `\n` is a "new line". Without it, the next text continues on the same line.
+- Text in quotes is printed exactly as written, including spaces.
+
+    printf("Hi ");
+    printf("there!\n");     // prints: Hi there!
+
+## Read more
+Beej's Guide to C Programming, chapter 2 "Hello, World!" — free at beej.us/guide/bgc
+
 @starter
 #include <stdio.h>
 

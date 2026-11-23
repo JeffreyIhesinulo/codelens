@@ -46,12 +46,28 @@ int main(int argc, char **argv) {
     app.progress = progress_load(app.progress_path());
     app.screen = std::ifstream(app.welcome_path()) ? Screen::Course : Screen::Welcome;
     app.load_steps();
+    app.auto_reading = true;
+    app.guides = true;
+    app.rewards.load(app.root + "/rewards.txt");
+    if (!std::ifstream(app.root + "/tour.txt"))
+        app.tour_step = 0;
     const char *ai_host = std::getenv("CODELENS_OLLAMA_HOST");
     const char *ai_port = std::getenv("CODELENS_OLLAMA_PORT");
     ai_init(ai_host ? ai_host : "127.0.0.1", ai_port ? std::atoi(ai_port) : 11434);
     tutor_refresh();
     ModalBackdrop backdrop;
     SetExitKey(KEY_NULL); // Esc is used for "back"
+    // Splash: logo and a short loading screen while the tutor check runs. CODELENS_NO_SPLASH=1 skips it.
+    if (!std::getenv("CODELENS_NO_SPLASH")) {
+        double start = GetTime();
+        while (!WindowShouldClose()) {
+            BeginDrawing();
+            ClearBackground(theme::bg);
+            bool done = draw_splash_screen((float)(GetTime() - start));
+            EndDrawing();
+            if (done) break;
+        }
+    }
     while (!WindowShouldClose()) {
         auto tutor = tutor_status();
         if (app.screen == Screen::Course && !app.ai_setup_checked && tutor.checked) {
@@ -71,6 +87,8 @@ int main(int argc, char **argv) {
                 draw_course_screen(app);
             else
                 app.steps.update_and_draw(app);
+            if (!app.celebration.empty())
+                draw_celebration(app);
             if (app.tutor.visible)
                 backdrop.capture();
         } else

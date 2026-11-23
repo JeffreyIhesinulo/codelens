@@ -31,6 +31,43 @@ Input:   3
          1 2 3
 Output:  3 2 1
 
+@read
+## A chain of boxes
+An array has a fixed size. A linked list can grow while the program runs. It is a chain of nodes. Each node holds a value and the address of the next node.
+
+    struct node {
+        int value;
+        struct node *next;   // the next node, or NULL at the end
+    };
+
+## Making a node
+Nodes are reserved with malloc while the program runs. `->` reaches a field through a pointer: `p->value` means "the value field of the node p points to".
+
+    struct node *head = malloc(sizeof(struct node));
+    head->value = 10;
+    head->next = NULL;       // the only node, so nothing comes after it
+
+## Walking the list
+Start at head and follow next until you reach NULL:
+
+    for (struct node *p = head; p != NULL; p = p->next) {
+        printf("%d ", p->value);
+    }
+
+The last node's next is NULL, which is how the loop knows the list has ended.
+
+## Giving memory back
+Every node reserved with malloc must be freed with free when you are done. Save the next node first, because after free the node may not be used:
+
+    while (head != NULL) {
+        struct node *after = head->next;
+        free(head);
+        head = after;
+    }
+
+## Read more
+Beej's Guide to C Programming, chapter 8 "Structs" and chapter 12 "Manual Memory Allocation" — free at beej.us/guide/bgc
+
 @starter
 #include <stdio.h>
 #include <stdlib.h>

@@ -13,6 +13,9 @@ void draw_welcome_screen(App &app) {
                          "code in small steps. Practice means solving a short task.";
         app.tutor.open(context, "", context.theory);
     }
+    draw_logo(x + 30, y - 70, 30);
+    if (app.guides)
+        mascot_say(x + 76, y - 70, 26, "Hi, I'm Bit! I'll help you find your way.", 1, 380);
     draw_text(g_fonts.title, 32, "Welcome to CodeLens", x, y, theme::text);
     draw_text(g_fonts.ui, 20, "Learn how programs work, one small step at a time.", x, y + 52, theme::text);
     draw_text(g_fonts.ui, g_fonts.ui_size,

@@ -16,6 +16,10 @@ struct ChatMessage {
 float draw_chat(Rectangle area, const std::vector<ChatMessage> &messages, bool thinking, float &scroll,
                 bool &stick_bottom);
 
+// The same formatting for longer texts (the lesson reading): "## " headings, 4-space code
+// blocks, lists, `code` and **bold**. Scrolls inside area.
+float draw_rich_text(Rectangle area, const std::string &text, float &scroll);
+
 struct TutorPanel {
     bool visible = false;
     Lesson lesson;
