@@ -98,6 +98,18 @@ int  ai_generate_task(const Lesson& lesson);                      // "More pract
 
 ## Tasks
 
+### Follow-up (23 Nov)
+- Linked lists: a chain of nodes with values and next links, head/p labels, NULL termination,
+  freed-node indicators and focus on pointer expressions such as `a->next->value`.
+- Use engine snapshots for heap nodes and stack-based nodes in Find the bug. Support both
+  GDB's direct struct fields and LLDB's nested element layout; scroll to the focused node.
+- If a snapshot omits fields of a live node, read them through `debug_eval` on the worker;
+  rendering never evaluates expressions or guesses node values.
+- Verify all steps of `06_lists` with the real debugger and an isolated progress/draft profile.
+
+At Ihor's request, heap narration now uses arrow notation for a single struct with either
+debugger layout. Regression cases retain indexing for real arrays and arrays of structs.
+
 ### Follow-up (22 Nov)
 - Order cards support dragging, insertion feedback and edge scrolling; arrow buttons remain available.
 - The editor supports mouse/keyboard selection, copy/cut/paste, undo/redo and whole-line deletion,

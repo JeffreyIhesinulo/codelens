@@ -49,6 +49,18 @@ bool all_unknown(const Variable& v) {
     return true;
 }
 
+// GDB exposes a single heap struct as fields; LLDB wraps those fields in [0].
+// Use the same names in narration without flattening real arrays or multiple structs.
+const std::vector<Variable>& heap_fields(const HeapBlock& block) {
+    if (block.cells.size() == 1) {
+        const Variable& first = block.cells.front();
+        if (first.name == "[0]" && !first.children.empty() &&
+            !first.children.front().name.empty() && first.children.front().name.front() != '[')
+            return first.children;
+    }
+    return block.cells;
+}
+
 std::string describe_new(const ProgramState& s, const Variable& v) {
     if (!v.children.empty()) {
         bool array = !v.children[0].name.empty() && v.children[0].name[0] == '[';
@@ -70,7 +82,7 @@ void diff_var(const ProgramState& sb, const ProgramState& sa, const Variable& b,
         for (size_t i = 0; i < a.children.size(); ++i) {
             const Variable& cb = b.children[i];
             const Variable& ca = a.children[i];
-            std::string sub = ca.name[0] == '[' ? name + ca.name : name + "." + ca.name;
+            std::string sub = !ca.name.empty() && ca.name[0] == '[' ? name + ca.name : name + "." + ca.name;
             diff_var(sb, sa, cb, ca, sub, where, out);
         }
         return;
@@ -213,7 +225,9 @@ std::string describe_step(const ProgramState& before, const ProgramState& after,
         }
         const HeapBlock& hb = before.heap[i];
         if (h.freed && !hb.freed) { facts.push_back("freed heap block " + std::to_string(i + 1)); continue; }
-        if (h.cells.size() != hb.cells.size()) continue;
+        const auto& fields = heap_fields(h);
+        const auto& old_fields = heap_fields(hb);
+        if (fields.size() != old_fields.size()) continue;
         // a write into the block: name it after a pointer to it ("p[0]"), or after the block
         std::string base = "heap block " + std::to_string(i + 1);
         bool named = false;
@@ -221,10 +235,10 @@ std::string describe_step(const ProgramState& before, const ProgramState& after,
             for (const Variable& v : f->vars)
                 if (v.is_pointer && v.points_to == h.address) { base = v.name; named = true; break; }
         // a struct node on the heap has its fields as cells: "head->value", "head->next"
-        for (size_t c = 0; c < h.cells.size(); ++c) {
-            const std::string& cn = h.cells[c].name;
-            std::string sub = cn[0] == '[' ? base + cn : (named ? base + "->" + cn : cn + " in " + base);
-            diff_var(before, after, hb.cells[c], h.cells[c], sub, "", facts);
+        for (size_t c = 0; c < fields.size(); ++c) {
+            const std::string& cn = fields[c].name;
+            std::string sub = !cn.empty() && cn[0] == '[' ? base + cn : (named ? base + "->" + cn : cn + " in " + base);
+            diff_var(before, after, old_fields[c], fields[c], sub, "", facts);
         }
     }
 

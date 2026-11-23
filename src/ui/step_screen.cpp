@@ -184,8 +184,11 @@ void StepScreen::launch_debug(App &app, const std::string &operation) {
     if (debugging && !app.lesson.task.tests.empty())
         input = app.lesson.task.tests.front().input;
     Lang lang = l.lang;
+    const bool lists = l.topic == "lists";
     error.clear();
-    job = std::async(std::launch::async, [source, input, lang, operation] {
+    if (operation == "start")
+        picture.reset();
+    job = std::async(std::launch::async, [source, input, lang, operation, lists] {
         Result r;
         bool success = false;
         if (operation == "start")
@@ -196,7 +199,7 @@ void StepScreen::launch_debug(App &app, const std::string &operation) {
             success = debug_finish();
         else
             success = debug_next();
-        r.state = debug_state();
+        r.state = lists ? list_debug_snapshot() : debug_state();
         if (!success && r.error.empty() && !r.state.finished)
             r.error = "The debugger could not complete this action. Choose Restart to try again.";
         return r;
@@ -565,7 +568,8 @@ void StepScreen::update_and_draw(App &app) {
             Step copy = s;
             Lang lang = l.lang;
             std::string value = answer.text;
-            job = std::async(std::launch::async, [copy, lang, value] {
+            const bool lists = l.topic == "lists";
+            job = std::async(std::launch::async, [copy, lang, value, lists] {
                 Result r;
                 r.verdict = check_prediction(copy, lang, value);
                 r.has_verdict = true;
@@ -578,7 +582,7 @@ void StepScreen::update_and_draw(App &app) {
                         for (int i = 0; i < 2000 && debug_active(); ++i)
                             debug_next();
                     }
-                    r.state = debug_state();
+                    r.state = lists ? list_debug_snapshot() : debug_state();
                     debug_stop();
                 }
                 return r;
