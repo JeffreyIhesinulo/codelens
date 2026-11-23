@@ -1,0 +1,45 @@
+## The idea
+The board is a grid of cells. The snake is a list of cells; the first one is the head. Every short moment the snake moves one cell. When the head reaches the apple, the snake grows.
+
+## The snake is an array
+Each part of the snake is a cell with a column and a row. An array from the Arrays lesson stores them, head first:
+
+    typedef struct { int x, y; } Cell;
+    Cell snake[400];
+    int length = 3;
+
+## Moving: shift everything by one
+To move, every part takes the place of the part in front of it, and the head moves one cell in the current direction. A loop from the Loops lesson does it, from the tail to the head:
+
+    for (int i = length - 1; i > 0; i--) {
+        snake[i] = snake[i - 1];
+    }
+    snake[0].x += dir_x;
+    snake[0].y += dir_y;
+
+## Eating and growing
+If the head is on the apple, the snake gets one cell longer and a new apple appears at a random free cell:
+
+    if (snake[0].x == apple.x && snake[0].y == apple.y) {
+        length = length + 1;
+        apple.x = GetRandomValue(0, 24);
+        apple.y = GetRandomValue(0, 14);
+    }
+
+## Crashing
+The game ends when the head leaves the board or touches the snake's own body. Again a loop and a condition:
+
+    for (int i = 1; i < length; i++) {
+        if (snake[i].x == snake[0].x && snake[i].y == snake[0].y) {
+            game_over = 1;
+        }
+    }
+
+## Not too fast
+The snake does not move every frame. A timer adds up the time, and the snake steps only every 0.13 seconds. Each apple makes the step a little shorter, so the game speeds up.
+
+## A linked list version
+A snake is also a natural linked list (see the Linked lists lesson): add a new head node in front, and remove the tail node unless you just ate. No shifting needed.
+
+## Try it yourself
+Add walls in the middle of the board, stored in a second array.

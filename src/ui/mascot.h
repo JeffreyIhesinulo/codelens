@@ -7,7 +7,8 @@
 
 // Purple-and-white raccoon head centred on (cx, cy); r = head radius. Blinks on its own.
 // mood: 0 normal, 1 happy (closed smiling eyes), 2 thinking (eyes look up).
-void draw_raccoon(float cx, float cy, float r, int mood = 0, float alpha = 1);
+// cyber 0..1 turns Bit into MAXON, the steel raccoon with red eyes (used in Challenges).
+void draw_raccoon(float cx, float cy, float r, int mood = 0, float alpha = 1, float cyber = 0);
 
 // A frosted "liquid glass" card: translucent fill, bright rim, soft shadow, a sheen on top.
 void draw_glass(Rectangle r, float roundness = 0.3f, float alpha = 1);
@@ -31,4 +32,4 @@ struct Rewards {
 };
 
 // Small flame and star badges for the course header.
-void draw_streak_badges(const Rewards &r, float right, float y);
+float draw_streak_badges(const Rewards &r, float right, float y);   // returns the left edge

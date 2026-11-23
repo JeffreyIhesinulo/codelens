@@ -2,6 +2,7 @@
 #include "screens.h"
 #include "memview_preview.h"
 #include "services.h"
+#include "audio.h"
 
 #include <sys/stat.h>
 #include <fstream>
@@ -49,6 +50,8 @@ int main(int argc, char **argv) {
     app.auto_reading = true;
     app.guides = true;
     app.rewards.load(app.root + "/rewards.txt");
+    audio::init(root + "/assets", app.root + "/sound.txt");
+    app.challenges.load(app.root);
     if (!std::ifstream(app.root + "/tour.txt"))
         app.tour_step = 0;
     const char *ai_host = std::getenv("CODELENS_OLLAMA_HOST");
@@ -61,6 +64,8 @@ int main(int argc, char **argv) {
     if (!std::getenv("CODELENS_NO_SPLASH")) {
         double start = GetTime();
         while (!WindowShouldClose()) {
+            audio::music("lobbyMusic");
+            audio::update();
             BeginDrawing();
             ClearBackground(theme::bg);
             bool done = draw_splash_screen((float)(GetTime() - start));
@@ -75,6 +80,12 @@ int main(int argc, char **argv) {
             if (!tutor.server || !tutor.installed)
                 app.screen = Screen::AiSetup;
         }
+        audio::update();
+        if (app.screen != Screen::Challenges)
+            audio::music("lobbyMusic");   // the challenges screen picks its own tracks
+        bool over_panel = audio::mouse_over_panel();
+        if (over_panel)
+            SetMouseOffset(-100000, -100000);   // the sound panel is on top: screens below ignore the mouse
         ui_begin_frame();
         BeginDrawing();
         ClearBackground(theme::bg);
@@ -85,6 +96,8 @@ int main(int argc, char **argv) {
                 draw_ai_setup_screen(app);
             else if (app.screen == Screen::Course)
                 draw_course_screen(app);
+            else if (app.screen == Screen::Challenges)
+                app.challenges.update_and_draw(app);
             else
                 app.steps.update_and_draw(app);
             if (!app.celebration.empty())
@@ -94,6 +107,8 @@ int main(int argc, char **argv) {
         } else
             backdrop.draw();
         app.tutor.update_and_draw();
+        SetMouseOffset(0, 0);
+        audio::draw_panel();
         EndDrawing();
         ui_end_frame();
     }
@@ -102,6 +117,7 @@ int main(int argc, char **argv) {
         app.lesson.close(app);
     app.steps.shutdown();
     backdrop.release();
+    audio::shutdown();
     fonts_unload();
     CloseWindow();
     return 0;

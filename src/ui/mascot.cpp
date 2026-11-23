@@ -56,44 +56,73 @@ long today() {
 
 // ---------------------------------------------------------------- Bit the raccoon
 
-void draw_raccoon(float cx, float cy, float r, int mood, float alpha) {
+void draw_raccoon(float cx, float cy, float r, int mood, float alpha, float cyber) {
+    cyber = std::clamp(cyber, 0.0f, 1.0f);
+    auto mix = [&](Color a, Color b) {
+        return Color{(unsigned char)(a.r + (b.r - a.r) * cyber), (unsigned char)(a.g + (b.g - a.g) * cyber),
+                     (unsigned char)(a.b + (b.b - a.b) * cyber), a.a};
+    };
+    const Color fur = mix(kFur, {118, 128, 144, 255}), fur_dark = mix(kFurDark, {74, 82, 96, 255});
+    const Color white = mix(kWhite, {196, 204, 216, 255}), ear = mix(kEar, {150, 160, 176, 255});
+    const Color mask = mix(kMask, {24, 26, 32, 255});
     auto A = [&](Color c) { return fade(c, alpha); };
     // ears
     for (int s : {-1, 1}) {
-        tri({cx + s * 0.98f * r, cy - 0.3f * r}, {cx + s * 0.62f * r, cy - 1.12f * r}, {cx + s * 0.2f * r, cy - 0.74f * r}, A(kFurDark));
-        tri({cx + s * 0.8f * r, cy - 0.42f * r}, {cx + s * 0.6f * r, cy - 0.9f * r}, {cx + s * 0.36f * r, cy - 0.7f * r}, A(kEar));
+        tri({cx + s * 0.98f * r, cy - 0.3f * r}, {cx + s * 0.62f * r, cy - 1.12f * r}, {cx + s * 0.2f * r, cy - 0.74f * r}, A(fur_dark));
+        tri({cx + s * 0.8f * r, cy - 0.42f * r}, {cx + s * 0.6f * r, cy - 0.9f * r}, {cx + s * 0.36f * r, cy - 0.7f * r}, A(ear));
     }
     // head and white cheek fluff
-    ellipse(cx, cy, r, r * 0.88f, A(kFur));
+    ellipse(cx, cy, r, r * 0.88f, A(fur));
     for (int s : {-1, 1})
-        tri({cx + s * 1.08f * r, cy + 0.22f * r}, {cx + s * 0.55f * r, cy + 0.02f * r}, {cx + s * 0.62f * r, cy + 0.66f * r}, A(kWhite));
+        tri({cx + s * 1.08f * r, cy + 0.22f * r}, {cx + s * 0.55f * r, cy + 0.02f * r}, {cx + s * 0.62f * r, cy + 0.66f * r}, A(white));
     // white muzzle and brows
-    ellipse(cx, cy + 0.38f * r, 0.6f * r, 0.46f * r, A(kWhite));
-    for (int s : {-1, 1}) ellipse(cx + s * 0.36f * r, cy - 0.4f * r, 0.27f * r, 0.11f * r, A(kWhite));
+    ellipse(cx, cy + 0.38f * r, 0.6f * r, 0.46f * r, A(white));
+    for (int s : {-1, 1}) ellipse(cx + s * 0.36f * r, cy - 0.4f * r, 0.27f * r, 0.11f * r, A(white));
+    // steel plating: seams and bolts appear as Bit turns into MAXON
+    if (cyber > 0.3f) {
+        float k = (cyber - 0.3f) / 0.7f;
+        Color seam = fade({40, 44, 52, 255}, alpha * k);
+        DrawLineEx({cx, cy - 0.86f * r}, {cx, cy - 0.5f * r}, std::max(1.0f, 0.04f * r), seam);
+        DrawLineEx({cx - 0.75f * r, cy + 0.1f * r}, {cx - 0.55f * r, cy + 0.45f * r}, std::max(1.0f, 0.03f * r), seam);
+        DrawLineEx({cx + 0.75f * r, cy + 0.1f * r}, {cx + 0.55f * r, cy + 0.45f * r}, std::max(1.0f, 0.03f * r), seam);
+        for (int s : {-1, 1}) DrawCircleV({cx + s * 0.2f * r, cy - 0.66f * r}, std::max(1.0f, 0.05f * r), fade({210, 216, 226, 255}, alpha * k));
+    }
     // the raccoon mask
-    ellipse(cx, cy - 0.06f * r, 0.5f * r, 0.13f * r, A(kMask));
-    for (int s : {-1, 1}) ellipse(cx + s * 0.38f * r, cy - 0.05f * r, 0.34f * r, 0.23f * r, A(kMask));
-    // eyes (blink every few seconds)
+    ellipse(cx, cy - 0.06f * r, 0.5f * r, 0.13f * r, A(mask));
+    for (int s : {-1, 1}) ellipse(cx + s * 0.38f * r, cy - 0.05f * r, 0.34f * r, 0.23f * r, A(mask));
+    // eyes: Bit's friendly eyes, or MAXON's glowing red ones
     bool blink = std::fmod(GetTime(), 4.2) < 0.13;
     for (int s : {-1, 1}) {
         float ex = cx + s * 0.38f * r, ey = cy - 0.06f * r;
-        if (mood == 1 || blink) {   // happy / closed: a small arch
-            float t = std::max(1.5f, 0.06f * r);
-            DrawLineEx({ex - 0.12f * r, ey + 0.03f * r}, {ex, ey - 0.07f * r}, t, A(kWhite));
-            DrawLineEx({ex, ey - 0.07f * r}, {ex + 0.12f * r, ey + 0.03f * r}, t, A(kWhite));
+        if (cyber > 0.5f) {
+            float glow = 0.6f + 0.4f * std::sin((float)GetTime() * 6);
+            DrawCircleV({ex, ey}, 0.26f * r, fade({255, 40, 60, 60}, alpha * glow));
+            // angry slanted eye
+            tri({ex - s * 0.17f * r, ey - 0.1f * r}, {ex + s * 0.17f * r, ey - 0.02f * r}, {ex, ey + 0.09f * r}, A({255, 50, 70, 255}));
+            DrawCircleV({ex, ey}, 0.04f * r, A({255, 210, 210, 255}));
             continue;
         }
-        DrawCircleV({ex, ey}, 0.15f * r, A(kWhite));
+        if (mood == 1 || blink) {   // happy / closed: a small arch
+            float t = std::max(1.5f, 0.06f * r);
+            DrawLineEx({ex - 0.12f * r, ey + 0.03f * r}, {ex, ey - 0.07f * r}, t, A(white));
+            DrawLineEx({ex, ey - 0.07f * r}, {ex + 0.12f * r, ey + 0.03f * r}, t, A(white));
+            continue;
+        }
+        DrawCircleV({ex, ey}, 0.15f * r, A(white));
         float look = mood == 2 ? -0.05f * r : 0.01f * r;
         DrawCircleV({ex + s * 0.01f * r, ey + look}, 0.095f * r, A(kNose));
-        DrawCircleV({ex + 0.03f * r, ey + look - 0.035f * r}, std::max(1.0f, 0.035f * r), A(kWhite));
+        DrawCircleV({ex + 0.03f * r, ey + look - 0.035f * r}, std::max(1.0f, 0.035f * r), A(white));
     }
-    // nose and smile
+    // nose and mouth (MAXON smirks)
     ellipse(cx, cy + 0.2f * r, 0.12f * r, 0.08f * r, A(kNose));
     float t = std::max(1.2f, 0.04f * r);
     DrawLineEx({cx, cy + 0.27f * r}, {cx, cy + 0.36f * r}, t, A(kNose));
-    DrawLineEx({cx - 0.14f * r, cy + 0.4f * r}, {cx, cy + 0.36f * r}, t, A(kNose));
-    DrawLineEx({cx, cy + 0.36f * r}, {cx + 0.14f * r, cy + 0.4f * r}, t, A(kNose));
+    if (cyber > 0.5f) {
+        DrawLineEx({cx - 0.16f * r, cy + 0.42f * r}, {cx + 0.16f * r, cy + 0.36f * r}, t, A(kNose));
+    } else {
+        DrawLineEx({cx - 0.14f * r, cy + 0.4f * r}, {cx, cy + 0.36f * r}, t, A(kNose));
+        DrawLineEx({cx, cy + 0.36f * r}, {cx + 0.14f * r, cy + 0.4f * r}, t, A(kNose));
+    }
 }
 
 // ---------------------------------------------------------------- liquid glass
@@ -174,7 +203,7 @@ int Rewards::lesson_done() {
 }
 bool Rewards::streak_alive() const { return last_day >= today() - 1; }
 
-void draw_streak_badges(const Rewards &r, float right, float y) {
+float draw_streak_badges(const Rewards &r, float right, float y) {
     int days = r.streak_alive() ? r.streak : 0;
     std::string s1 = std::to_string(days) + (days == 1 ? " day streak" : " day streak");
     std::string s2 = std::to_string(r.xp) + " XP";
@@ -187,4 +216,5 @@ void draw_streak_badges(const Rewards &r, float right, float y) {
     draw_text(g_fonts.ui_bold, 15, s1, b1.x + 36, b1.y + 9, days ? theme::text : theme::text_dim);
     star({b2.x + 20, b2.y + 18}, 9, {250, 204, 21, 255});
     draw_text(g_fonts.ui_bold, 15, s2, b2.x + 36, b2.y + 9, theme::text);
+    return b1.x;
 }

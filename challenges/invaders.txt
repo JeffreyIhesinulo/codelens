@@ -1,0 +1,44 @@
+## The idea
+A whole army moves left and right together. Each time it reaches the edge of the screen it turns around and steps down. You shoot from below. If the army reaches the bottom, you lose.
+
+## The army is an array
+32 minions in 4 rows of 8. Each one has a position and an alive flag, stored in arrays (the Arrays lesson):
+
+    float x[32], y[32];
+    int alive[32];
+
+## Moving together
+All minions move by the same amount. If any of them touches an edge, the whole army turns around and steps down. One loop to move, one condition to turn:
+
+    int edge = 0;
+    for (int i = 0; i < 32; i++) {
+        if (!alive[i]) continue;
+        x[i] += dx * dt;
+        if (x[i] < 30 || x[i] > 770) edge = 1;
+    }
+    if (edge) {
+        dx = -dx;
+        for (int i = 0; i < 32; i++) y[i] += 16;
+    }
+
+The fewer minions are left, the faster they move. That is why the end is the hardest part.
+
+## Your bullet
+Only one bullet can fly at a time. It moves up; if it is close enough to a living minion, both disappear:
+
+    if (bullet_on) {
+        bullet_y -= 600 * dt;
+        for (int i = 0; i < 32; i++) {
+            if (alive[i] && fabsf(bullet_x - x[i]) < 17 && fabsf(bullet_y - y[i]) < 14) {
+                alive[i] = 0;
+                bullet_on = 0;
+                score = score + 1;
+            }
+        }
+    }
+
+## The enemy shoots back
+A timer counts down. When it reaches zero, a random living minion fires a bullet downwards, and the timer starts again with a random value. Random timing makes the game feel alive.
+
+## Try it yourself
+Add shields: a few blocks above your ship that disappear after three hits.

@@ -8,6 +8,9 @@ progress.txt
 welcome.txt
 rewards.txt
 tour.txt
+challenges.txt
+sound.txt
+*.tar.gz
 drafts/
 
 # Local lesson position and answers
