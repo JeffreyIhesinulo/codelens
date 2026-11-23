@@ -1,0 +1,42 @@
+## The idea
+A wall of bricks at the top, a paddle at the bottom and a ball in between. Each brick the ball touches disappears. Do not let the ball fall past the paddle.
+
+## The wall is an array
+50 bricks: 5 rows of 10. Each brick only needs to remember whether it still exists. An array from the Arrays lesson, and two nested loops to place the bricks:
+
+    int alive[50];
+    for (int row = 0; row < 5; row++) {
+        for (int col = 0; col < 10; col++) {
+            alive[row * 10 + col] = 1;
+        }
+    }
+
+The brick number is row * 10 + col, so brick 23 is in row 2, column 3. This is how a 2D grid is stored in a 1D array.
+
+## Hitting a brick
+Every frame, check the ball against every brick that still exists. The first one it touches disappears and the ball bounces:
+
+    for (int i = 0; i < 50; i++) {
+        if (!alive[i]) continue;
+        Rectangle brick = { 22 + (i % 10) * 76, 50 + (i / 10) * 28, 70, 22 };
+        if (CheckCollisionCircleRec(ball, 7, brick)) {
+            alive[i] = 0;
+            vy = -vy;
+            score = score + 1;
+            break;
+        }
+    }
+
+## Aiming with the paddle
+Where the ball lands on the paddle decides its new direction: the left edge sends it left, the middle straight up, the right edge right. That makes the game feel controllable:
+
+    if (CheckCollisionCircleRec(ball, 7, paddle)) {
+        vy = -fabsf(vy);
+        vx = (ball_x - (paddle_x + 50)) / 50 * 340;
+    }
+
+## Lives
+When the ball falls below the screen you lose a life, and the ball waits on the paddle until you press Space. Three lives, then MAXON wins.
+
+## Try it yourself
+Give some bricks two hits: store 2 in alive[i] and count down.

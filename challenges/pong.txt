@@ -1,0 +1,52 @@
+## The idea
+Pong is two paddles and a ball. The ball flies, bounces off the top and bottom walls, and each paddle tries to send it back. It is the perfect first game because it uses only a few ideas you already know.
+
+## Every game is a loop
+A game runs the same three steps about 60 times per second, until the window closes. This is a while loop from the Loops lesson:
+
+    while (!WindowShouldClose()) {
+        // 1. read the keys
+        // 2. move things and check collisions
+        // 3. draw everything
+    }
+
+## Moving the ball
+The ball has a position (x, y) and a speed (vx, vy). Every frame we add the speed, multiplied by the time since the last frame, so the game runs at the same speed on every computer:
+
+    float dt = GetFrameTime();
+    ball_x += vx * dt;
+    ball_y += vy * dt;
+
+## Bouncing: just conditions
+When the ball touches the top or bottom, we flip its vertical speed. This is an if from the Conditions lesson:
+
+    if (ball_y < 8 || ball_y > 492) {
+        vy = -vy;
+    }
+
+## Hitting the paddle
+The paddle is a rectangle. If the ball is at the paddle's x and between its top and bottom, it bounces back, a little faster each time:
+
+    if (ball_x - 8 <= paddle_x + 12 &&
+        ball_y >= paddle_y && ball_y <= paddle_y + 80) {
+        vx = -vx * 1.06f;
+        hits = hits + 1;          // the 10 returns you needed
+    }
+
+## Moving your paddle
+
+    if (IsKeyDown(KEY_UP))   paddle_y -= 440 * dt;
+    if (IsKeyDown(KEY_DOWN)) paddle_y += 440 * dt;
+
+MAXON's paddle cheats a little: it simply follows the ball's y. That is a whole "AI" in one line.
+
+## Drawing
+
+    BeginDrawing();
+    ClearBackground(BLACK);
+    DrawRectangle(paddle_x, paddle_y, 12, 80, WHITE);
+    DrawCircle(ball_x, ball_y, 8, WHITE);
+    EndDrawing();
+
+## Try it yourself
+Make Pong two-player: the second paddle uses W and S instead of following the ball.

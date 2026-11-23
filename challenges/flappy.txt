@@ -1,0 +1,45 @@
+## The idea
+The bird (here it is Bit) falls all the time because of gravity. Pressing Space gives it a quick push up. Columns move from right to left, each with a gap. Fly through the gap and do not touch anything.
+
+## Gravity in two lines
+Speed changes the position, and gravity changes the speed. That is all the physics this game needs:
+
+    vy = vy + 1300 * dt;      // gravity pulls down a little more every frame
+    y  = y  + vy * dt;
+
+    if (IsKeyPressed(KEY_SPACE)) {
+        vy = -420;            // a flap: a sudden speed upwards
+    }
+
+## The columns are an array
+Only four columns exist. Each has an x position and the height of its gap. They live in an array (the Arrays lesson):
+
+    typedef struct { float x, gap_y; int passed; } Column;
+    Column cols[4];
+
+## Moving and reusing columns
+Every frame all columns move left. When one leaves the screen on the left, it jumps to the back of the line with a new random gap, so four columns are enough for an endless game:
+
+    for (int i = 0; i < 4; i++) {
+        cols[i].x -= 210 * dt;
+        if (cols[i].x < -80) {
+            cols[i].x = last_x + 260;
+            cols[i].gap_y = GetRandomValue(140, 360);
+            cols[i].passed = 0;
+        }
+    }
+
+## Scoring and crashing: conditions
+A column counts once, when the bird has passed it. A crash is when the bird touches the top or bottom part of a column:
+
+    if (!cols[i].passed && cols[i].x + 70 < bird_x) {
+        cols[i].passed = 1;
+        score = score + 1;
+    }
+    if (CheckCollisionCircleRec(bird, 13, top_part) ||
+        CheckCollisionCircleRec(bird, 13, bottom_part)) {
+        game_over = 1;
+    }
+
+## Try it yourself
+Make the gap a little smaller every five columns.

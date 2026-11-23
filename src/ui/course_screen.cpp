@@ -1,16 +1,28 @@
 #include "screens.h"
 #include "services.h"
+#include "audio.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
 
 void draw_course_screen(App &app) {
     float w = GetScreenWidth(), h = GetScreenHeight();
+    if (app.guides)
+        draw_wallpaper(app.challenges.wallpaper);
     draw_logo(52, 50, 20);
     draw_text(g_fonts.title, 30, "Your learning path", 88, 25, theme::text);
     draw_text(g_fonts.ui, 17, "Choose a topic, or continue where you stopped.", 88, 65, theme::text_dim);
+    float sound_x = w - 372 - 56;
     if (app.guides)
-        draw_streak_badges(app.rewards, w - 372, 24);
+        sound_x = draw_streak_badges(app.rewards, w - 372, 24) - 56;
+    if (app.guides)
+        audio::button({sound_x, 23, 46, 38});
+    // wallpaper picker: the default background or any game beaten in Challenges
+    Rectangle wall_btn{sound_x - 146, 23, 136, 38};
+    if (app.guides && button(wall_btn, "Wallpaper", app.tour_step < 0 && app.celebration.empty(),
+                             app.challenges.picker ? ButtonStyle::Primary : ButtonStyle::Soft))
+        app.challenges.picker = !app.challenges.picker;
+    bool picking = app.guides && app.challenges.picker;
     if (button({w - 355, 24, 155, 36}, "Tutor setup", true, ButtonStyle::Ghost)) {
         tutor_refresh();
         app.screen = Screen::AiSetup;
@@ -100,7 +112,7 @@ void draw_course_screen(App &app) {
             DrawCircle(sx + 4, y + 81, 4, total && passed == total ? theme::success : theme::border);
             draw_text(g_fonts.ui, 14, stages[stage], sx + 15, y + 73, total ? theme::text : theme::text_dim);
         }
-        if (hover && app.tour_step < 0 && app.celebration.empty()) {
+        if (hover && app.tour_step < 0 && app.celebration.empty() && !picking) {
             ui_cursor_hand();
             if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
                 app.steps.open(app, i);
@@ -111,10 +123,54 @@ void draw_course_screen(App &app) {
     bool ready = tutor_status().installed && ai_available();
     draw_text(g_fonts.ui, 15, ready ? "Local tutor ready" : "Tutor offline — lessons still work", 32, h - 47,
               ready ? theme::success : theme::text_dim);
-    if (!app.lessons.empty() && button({w - 260, h - 66, 228, 42}, "Continue →", app.tour_step < 0 && app.celebration.empty(), ButtonStyle::Primary))
+    if (app.guides && button({w - 260 - 14 - 200, h - 66, 200, 42}, "Challenges",
+                             app.tour_step < 0 && app.celebration.empty(), ButtonStyle::Soft))
+        app.challenges.open(app);
+    if (!app.lessons.empty() && button({w - 260, h - 66, 228, 42}, "Continue →", app.tour_step < 0 && app.celebration.empty() && !picking, ButtonStyle::Primary))
         app.steps.open(app, resume);
     if (app.lessons.empty())
         draw_text(g_fonts.ui, 18, "No lessons were found. Check the lessons folder.", 40, 140, theme::danger);
+
+    if (picking) {
+        auto list = ChallengeScreen::game_list();
+        float pw = 330, row = 46, ph = 64 + (list.size() + 1) * row;
+        Rectangle p{std::min(wall_btn.x, w - pw - 12), wall_btn.y + wall_btn.height + 8, pw, ph};
+        DrawRectangleRounded({p.x, p.y + 4, p.width, p.height}, 0.06f, 8, {0, 0, 0, 90});
+        DrawRectangleRounded(p, 0.06f, 8, theme::panel);
+        DrawRectangleRoundedLinesEx(p, 0.06f, 8, 1, theme::accent_dk);
+        draw_text(g_fonts.ui_bold, 16, "Background", p.x + 16, p.y + 14, theme::text);
+        draw_text(g_fonts.ui, 13, "Beat a game in Challenges to unlock it.", p.x + 16, p.y + 38, theme::text_dim);
+        float y = p.y + 64;
+        auto option = [&](const std::string &key, const std::string &label, bool unlocked) {
+            Rectangle r{p.x + 10, y, p.width - 20, row - 6};
+            bool chosen = app.challenges.wallpaper == key;
+            bool hover = unlocked && CheckCollisionPointRec(GetMousePosition(), r);
+            DrawRectangleRounded(r, 0.25f, 6, chosen ? theme::accent_soft : hover ? theme::panel_hi : theme::panel);
+            if (chosen) DrawRectangleRoundedLinesEx(r, 0.25f, 6, 1, theme::accent);
+            DrawCircle((int)(r.x + 18), (int)(r.y + r.height / 2), 6, chosen ? theme::accent : theme::border);
+            if (chosen) DrawCircle((int)(r.x + 18), (int)(r.y + r.height / 2), 3, theme::text);
+            draw_text(g_fonts.ui, 16, label, r.x + 34, r.y + 10, unlocked ? theme::text : theme::text_dim);
+            if (!unlocked) {
+                float lw = text_width(g_fonts.ui, 13, "Locked");
+                draw_text(g_fonts.ui, 13, "Locked", r.x + r.width - lw - 12, r.y + 12, theme::text_dim);
+            }
+            if (hover) {
+                ui_cursor_hand();
+                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && !chosen) {
+                    app.challenges.wallpaper = key;
+                    app.challenges.save();
+                }
+            }
+            y += row;
+        };
+        option("", "Default (no animation)", true);
+        for (const auto &g : list) option(g.first, g.second, app.challenges.beaten.count(g.first) > 0);
+        Vector2 mp = GetMousePosition();
+        if ((IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !CheckCollisionPointRec(mp, p) &&
+             !CheckCollisionPointRec(mp, wall_btn)) ||
+            IsKeyPressed(KEY_ESCAPE))
+            app.challenges.picker = false;
+    }
 
     // First-run tour: Bit the raccoon shows where things are.
     if (app.guides && app.tour_step >= 0 && !app.tutor.visible) {
@@ -129,7 +185,12 @@ void draw_course_screen(App &app) {
             {"Stuck anywhere? Press Ask the tutor. It runs on your computer, so it is private and works offline.",
              {w - 196, 18, 170, 48}},
             {"Finish lessons to earn XP and grow your streak. Come back every day to keep it going!",
-             {w - 372 - 330, 18, 340, 48}},
+             {sound_x + 50, 18, w - 372 - sound_x - 44, 48}},
+            {"Want a break? Challenges has retro games against MAXON. Beat one and it becomes an animated "
+             "wallpaper here; the Wallpaper button switches between them. But careful: something strange happens to me in there...",
+             {w - 260 - 14 - 206, h - 72, 212, 54}},
+            {"Music too loud? The speaker button turns the sound on or off and sets the music and effects volume.",
+             {sound_x - 6, 17, 58, 50}},
             {"Press Continue whenever you are ready. Every lesson starts with a short reading. Have fun!",
              {w - 266, h - 72, 240, 54}},
         };
