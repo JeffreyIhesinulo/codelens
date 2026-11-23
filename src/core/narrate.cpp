@@ -68,6 +68,7 @@ std::string describe_new(const ProgramState& s, const Variable& v) {
         return array ? "created " + v.name + " (" + std::to_string(v.children.size()) + " boxes" + empty + ")"
                      : "created " + v.name + (empty.empty() ? "" : " (no values yet)");
     }
+    if (v.value == "empty" && v.type.rfind("std::", 0) == 0) return "created " + v.name + " (empty)";
     if (v.value == "?") return "created " + v.name + " (no value yet)";
     if (v.is_pointer)
         return v.points_to ? "created " + v.name + ", pointing to " + target(show_value(s, v))
@@ -78,6 +79,15 @@ std::string describe_new(const ProgramState& s, const Variable& v) {
 // Differences inside one variable (and its array boxes / struct fields).
 void diff_var(const ProgramState& sb, const ProgramState& sa, const Variable& b, const Variable& a,
               const std::string& name, const std::string& where, std::vector<std::string>& out) {
+    if (a.children.size() != b.children.size() && a.type.rfind("std::", 0) == 0) {   // vector grew or shrank
+        std::string items;
+        for (size_t i = 0; i < a.children.size() && i < 8; ++i)
+            items += (i ? ", " : "") + a.children[i].value;
+        if (a.children.size() > 8) items += ", ...";
+        out.push_back(name + where + " now has " + std::to_string(a.children.size()) +
+                      (a.children.size() == 1 ? " item" : " items") + (items.empty() ? "" : ": {" + items + "}"));
+        return;
+    }
     if (!a.children.empty() && a.children.size() == b.children.size()) {
         for (size_t i = 0; i < a.children.size(); ++i) {
             const Variable& cb = b.children[i];

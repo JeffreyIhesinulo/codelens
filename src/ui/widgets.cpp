@@ -58,12 +58,18 @@ void fonts_unload() {
 
 // ---------------------------------------------------------------- text
 
+// UI text is drawn a little larger than the layout sizes for readability (code keeps its size:
+// the editor measures its own character grid).
+float text_scale(const Font& f) { return f.texture.id == g_fonts.mono.texture.id ? 1.0f : 1.15f; }
+
 float text_width(const Font& f, float size, const std::string& s) {
-    return MeasureTextEx(f, s.c_str(), size, 0).x;
+    return MeasureTextEx(f, s.c_str(), size * text_scale(f), 0).x;
 }
 
 void draw_text(const Font& f, float size, const std::string& s, float x, float y, Color c) {
-    DrawTextEx(f, s.c_str(), {std::round(x), std::round(y)}, size, 0, c);
+    float k = text_scale(f);
+    // grow upwards-and-downwards around the same centre so callers' vertical layout still fits
+    DrawTextEx(f, s.c_str(), {std::round(x), std::round(y - size * (k - 1) * 0.5f)}, size * k, 0, c);
 }
 
 static size_t next_character(const std::string& text, size_t offset) {
@@ -131,8 +137,8 @@ float draw_wrapped(const Font& f, float size, const std::string& s, Rectangle ar
     std::vector<std::string> lines = wrap_text(f, size, s, area.width);
     float y = area.y;
     for (const std::string& l : lines) {
-        draw_text(f, size, l, area.x, y, c);
-        y += size + gap;
+        draw_text(f, size, l, area.x, y + size * (text_scale(f) - 1) * 0.5f, c);
+        y += size * text_scale(f) + gap;
     }
     return y - area.y;
 }

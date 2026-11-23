@@ -6,6 +6,8 @@ cmake-build-*/
 # per-user state
 progress.txt
 welcome.txt
+rewards.txt
+tour.txt
 drafts/
 
 # Local lesson position and answers

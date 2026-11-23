@@ -197,6 +197,7 @@ private:
         return s;
     }
     static void mark_unknown(Variable& v) {
+        if (v.type.rfind("std::", 0) == 0) return;   // std::string s; std::vector<int> v; start empty, not garbage
         if (v.children.empty()) v.value = "?";
         for (Variable& c : v.children) mark_unknown(c);
     }
@@ -584,6 +585,36 @@ Variable Session::read_variable(const MIValue& mv, int level) {
         // char arrays print as a string ("Ann"), not as {...}: keep that as the value
         if (parts.empty()) v.value = full;
         else v.value.clear();
+    }
+    // C++: GDB's pretty printer shows "std::vector of length 3, capacity 4 = {3, 8, 1}".
+    // Show it like an array: one box per element, and a short type name.
+    static const std::regex vec(R"(^std::(vector|deque|list|array)(?: of length (\d+))?(?:, capacity \d+)?(?: = (\{.*\}))?$)");
+    std::smatch m;
+    if (v.children.empty() && std::regex_match(v.value, m, vec)) {
+        std::string kind = m[1].str();
+        size_t lt = v.type.find('<');
+        std::string elem;
+        if (lt != std::string::npos) {   // std::vector<int, std::allocator<int> > -> int
+            int depth = 0;
+            for (size_t i = lt + 1; i < v.type.size(); ++i) {
+                char c = v.type[i];
+                if (c == '<') ++depth;
+                if (c == '>' && depth-- == 0) break;
+                if (c == ',' && depth == 0) break;
+                elem += c;
+            }
+        }
+        while (!elem.empty() && elem.back() == ' ') elem.pop_back();
+        if (!elem.empty()) v.type = "std::" + kind + "<" + elem + ">";
+        if (m[3].matched)
+            for (const std::string& part : split_aggregate(m[3].str())) {
+                Variable c;
+                c.name = "[" + std::to_string(v.children.size()) + "]";
+                c.type = elem;
+                c.value = part;
+                v.children.push_back(c);
+            }
+        v.value = v.children.empty() ? "empty" : "";
     }
     return v;
 }

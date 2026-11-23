@@ -1,0 +1,211 @@
+@id     07_cpp_hello
+@title  Hello, C++
+@topic  output
+@lang   cpp
+@show   values
+
+@theory
+C++ grew out of C, so everything you learned still works. It adds easier tools.
+
+    #include <iostream>
+    #include <string>
+
+    int main() {
+        std::string name = "Ann";
+        std::cout << "Hi " << name << "!" << std::endl;
+        return 0;
+    }
+
+std::cout is the screen. The arrows << send each piece to it, from left to right.
+std::endl ends the line, like \n in C. std::cin >> x reads a value from the keyboard.
+std::string holds text of any length, and + joins two strings.
+
+Your task: read a name (one word) and print exactly:
+
+    Hello, <name>!
+
+Input:   Sam
+Output:  Hello, Sam!
+
+@read
+## From C to C++
+C++ grew out of C. Almost everything you learned in C still works, but C++ adds tools that make common jobs easier and safer. The first two you will meet are std::cout for output and std::string for text.
+
+    #include <iostream>
+    #include <string>
+
+    int main() {
+        std::string name = "Ann";
+        std::cout << "Hi " << name << "!" << std::endl;
+        return 0;
+    }
+
+## Output with std::cout
+- `std::cout` is the screen.
+- `<<` sends a value to it. You can chain several: text, numbers and variables, printed from left to right.
+- `std::endl` ends the line, like `\n` in C.
+
+No %d or %s is needed: cout knows how to print each type.
+
+## Input with std::cin
+`std::cin >> x` reads a value typed on the keyboard into x. The arrows show which way the data moves: out to the screen with <<, in from the keyboard with >>.
+
+    int age;
+    std::cin >> age;
+
+## Text with std::string
+A std::string holds text of any length. `+` joins two strings, and `.size()` tells how many characters there are.
+
+    std::string first = "Code";
+    std::string both = first + "Lens";    // "CodeLens"
+
+## Read more
+learncpp.com, "Introduction to iostream: cout, cin, and endl" and lesson 5.7 "Introduction to std::string"
+
+@starter
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string name;
+    std::cin >> name;
+
+    // print Hello, <name>!
+
+    return 0;
+}
+
+@solution
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string name;
+    std::cin >> name;
+
+    std::cout << "Hello, " << name << "!" << std::endl;
+
+    return 0;
+}
+
+@test
+@input
+Sam
+@expected
+Hello, Sam!
+
+@test
+@input
+Ann
+@expected
+Hello, Ann!
+
+@hidden_test
+@input
+Codelens
+@expected
+Hello, Codelens!
+
+#! ------------------------------------------------------------------
+#! Steps: Explore -> Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step watch
+@title  Watch cout
+@code
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string name = "Ann";
+    int age = 20;
+    std::cout << "Hi " << name << "!" << std::endl;
+    age = age + 1;
+    std::cout << name << " is now " << age << std::endl;
+    return 0;
+}
+@text
+Press Next line and watch what appears in the program output.
+std::cout << sends each piece to the screen, left to right. std::endl ends the line.
+
+@step predict
+@title  Predict the output
+@code
+#include <iostream>
+
+int main() {
+    std::cout << "Hi ";
+    std::cout << "there" << std::endl;
+    std::cout << 2 + 3 << std::endl;
+    return 0;
+}
+@text
+What does this program print?
+The first line has no std::endl, so the next text continues on the same line. 2 + 3 is calculated before it is printed.
+
+@step choose
+@title  Join two strings
+@code
+std::string first = "Code";
+std::string second = "Lens";
+std::string both = first + second;
+@text
+What is in both after these lines run?
+@option "Code Lens"
+@option "CodeLens"
+@option "Code+Lens"
+@option An error: you cannot add text
+@correct 2
+@answer
++ joins two std::string values with nothing in between, so both holds "CodeLens".
+
+@step order
+@title  Put the program in order
+@text
+Put the lines in order so the program reads a name and greets it.
+A variable must exist before cin can read into it, and before cout can print it.
+@code
+std::string name;
+std::cin >> name;
+std::cout << "Hi " << name << std::endl;
+
+@step find_bug
+@title  Find the bug
+@text
+Fix the line so the program prints Hello, Ann! on the screen.
+The arrows point the wrong way: >> is for reading with cin, << is for writing with cout.
+@starter
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string name = "Ann";
+    std::cout >> "Hello, " >> name >> "!" >> std::endl;
+    return 0;
+}
+@editable 6-6
+@solution
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string name = "Ann";
+    std::cout << "Hello, " << name << "!" << std::endl;
+    return 0;
+}
+@test
+@expected
+Hello, Ann!
+
+@step explain
+@title  Explain it
+@text
+What is the difference between std::cout << x and std::cin >> x?
+@rubric
+screen; print; keyboard; read; input; output
+@answer
+std::cout << x prints x on the screen (output). std::cin >> x reads a value typed on the
+keyboard and stores it in x (input). The arrows show which way the data moves.
+
+@step practice
+@title  Practice

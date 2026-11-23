@@ -1,5 +1,6 @@
 #include "tutor.h"
 #include "services.h"
+#include "mascot.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,6 +17,8 @@ float line_h() { return std::round(g_fonts.ui_size * 1.45f); }
 struct Piece {
     std::string text;
     bool code = false, bold = false;
+    bool block = false;     // a line of a code block (4-space indent): drawn on a full-width strip
+    float size = 0;         // 0 = default size; headings are larger
     float x = 0, w = 0;
     int line = 0;
 };
@@ -24,15 +27,17 @@ struct Layout {
     std::vector<Piece> pieces;
     std::vector<float> line_y;   // top of each line, relative to the text block
     float height = 0, width = 0; // width of the widest line
+    float max_w = 0;
 };
 
 const Font &font_of(const Piece &p) { return p.code ? g_fonts.mono : p.bold ? g_fonts.ui_bold : g_fonts.ui; }
-float size_of(const Piece &p) { return p.code ? g_fonts.mono_size - 1 : g_fonts.ui_size; }
+float size_of(const Piece &p) { return p.size > 0 ? p.size : p.code ? g_fonts.mono_size + 1 : g_fonts.ui_size; }
 
 // Lays out the message: blank line = new paragraph, "- " / "* " / "1. " = list item,
 // `x` = code, **x** = bold. Words wrap at max_w.
 Layout layout(const std::string &text, float max_w) {
     Layout out;
+    out.max_w = max_w;
     float space = text_width(g_fonts.ui, g_fonts.ui_size, " ");
     float x = 0, y = 0, indent = 0;
     int line = 0;
@@ -60,10 +65,35 @@ Layout layout(const std::string &text, float max_w) {
             x = 0;
             continue;
         }
-        row = row.substr(a);
+        bool code_row = a >= 4;   // indented by 4+ spaces: a line of a code block
         if (x > 0) new_line(0);   // a single newline still breaks the line
         first_para = false;
         indent = 0;
+        if (code_row) {
+            Piece p;
+            p.text = row.substr(4);
+            p.code = p.block = true;
+            p.x = 14;
+            p.line = line;
+            p.w = text_width(g_fonts.mono, size_of(p), p.text);
+            out.pieces.push_back(p);
+            x = 1;   // the next row starts a new line
+            continue;
+        }
+        row = row.substr(a);
+        if (row.rfind("## ", 0) == 0) {   // heading
+            if (line > 0) { y += 10; out.line_y[line] = y; }
+            Piece p;
+            p.text = row.substr(3);
+            p.bold = true;
+            p.size = g_fonts.ui_size + 4;
+            p.line = line;
+            p.w = text_width(font_of(p), size_of(p), p.text);
+            out.pieces.push_back(p);
+            y += 6;
+            x = 1;
+            continue;
+        }
         // list item: draw a bullet and indent the rest
         bool bullet = row.rfind("- ", 0) == 0 || row.rfind("* ", 0) == 0;
         size_t dot = row.find(". ");
@@ -121,6 +151,11 @@ Layout layout(const std::string &text, float max_w) {
 void draw_layout(const Layout &l, float x0, float y0, Color text) {
     for (const Piece &p : l.pieces) {
         float x = x0 + p.x, y = y0 + l.line_y[p.line];
+        if (p.block) {
+            DrawRectangle((int)x0, (int)y - 2, (int)l.max_w, (int)line_h(), theme::bg);
+            draw_text(g_fonts.mono, size_of(p), p.text, x, y + 3, theme::text);
+            continue;
+        }
         if (p.code) {
             float pad = 3;
             DrawRectangleRounded({x - pad, y - 1, p.w + 2 * pad, line_h() - 4}, 0.3f, 4, theme::bg);
@@ -132,6 +167,15 @@ void draw_layout(const Layout &l, float x0, float y0, Color text) {
 }
 
 } // namespace
+
+float draw_rich_text(Rectangle area, const std::string &text, float &scroll) {
+    Layout l = layout(text, area.width - 16);
+    BeginScissorMode((int)area.x, (int)area.y, (int)area.width, (int)area.height);
+    draw_layout(l, area.x, area.y - scroll, theme::text);
+    EndScissorMode();
+    scroll_area(area, l.height + 20, scroll);
+    return l.height;
+}
 
 float draw_chat(Rectangle area, const std::vector<ChatMessage> &messages, bool thinking, float &scroll,
                 bool &stick_bottom) {
@@ -152,8 +196,12 @@ float draw_chat(Rectangle area, const std::vector<ChatMessage> &messages, bool t
     float y = area.y - scroll;
     auto bubble = [&](bool from_ai, float w, float h) {
         float bx = from_ai ? area.x : area.x + area.width - w;
-        draw_text(g_fonts.ui_bold, 13, from_ai ? "Tutor" : "You", from_ai ? bx + 2 : bx + w - text_width(g_fonts.ui_bold, 13, "You") - 2,
-                  y, from_ai ? theme::accent : theme::text_dim);
+        if (from_ai) {   // Bit the raccoon is the tutor
+            draw_raccoon(bx + 9, y + 9, 8);
+            draw_text(g_fonts.ui_bold, 13, "Bit · tutor", bx + 24, y + 1, theme::accent);
+        } else
+            draw_text(g_fonts.ui_bold, 13, "You", bx + w - text_width(g_fonts.ui_bold, 13, "You") - 2, y,
+                      theme::text_dim);
         Rectangle b{bx, y + kLabel, w, h};
         DrawRectangleRounded(b, std::min(0.5f, 24.0f / std::max(h, 1.0f)), 8, from_ai ? theme::panel_hi : theme::accent_dk);
         if (from_ai) DrawRectangleRounded({b.x, b.y + 8, 3, b.height - 16}, 1, 4, theme::accent);
@@ -219,11 +267,12 @@ void TutorPanel::update_and_draw() {
     // header: title, where the tutor runs, Close
     Rectangle head{r.x, r.y, r.width, 72};
     DrawRectangleRec(head, theme::accent_soft);
-    draw_text(g_fonts.ui_bold, 20, "Ask the tutor", head.x + 20, head.y + 14, theme::text);
+    draw_raccoon(head.x + 44, head.y + 40, 24, request >= 0 ? 2 : 0);
+    draw_text(g_fonts.ui_bold, 20, "Ask Bit, your tutor", head.x + 82, head.y + 14, theme::text);
     bool on = ai_available();
-    DrawCircle((int)(head.x + 25), (int)(head.y + 51), 4, on ? theme::success : theme::warning);
+    DrawCircle((int)(head.x + 87), (int)(head.y + 51), 4, on ? theme::success : theme::warning);
     draw_text(g_fonts.ui, 14, on ? "Runs on your computer · private" : "Offline: start Ollama to ask questions",
-              head.x + 36, head.y + 43, theme::text_dim);
+              head.x + 98, head.y + 43, theme::text_dim);
     if (button({head.x + head.width - 96, head.y + 18, 80, 34}, "Close", true, ButtonStyle::Ghost) ||
         IsKeyPressed(KEY_ESCAPE)) {
         visible = false;
@@ -235,7 +284,7 @@ void TutorPanel::update_and_draw() {
     Rectangle area{body.x, body.y, body.width - 8, body.height - 64};
     if (messages.empty() && request < 0) {
         std::vector<ChatMessage> intro{
-            {true, on ? "Hi! Ask me anything about this step. I can see the example, the instruction and what the "
+            {true, on ? "Hi, I'm Bit! Ask me anything about this step. I can see the example, the instruction and what the "
                         "program just did.\n\nFor example:\n- Why did this line change the value?\n- What does `\\n` do?"
                       : "The tutor is offline. Start Ollama on this computer, then ask your question here."}};
         bool no = false;

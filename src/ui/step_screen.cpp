@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <sstream>
 
 namespace {
@@ -110,6 +111,10 @@ void StepScreen::open(App &app, int index) {
     furthest = std::min(furthest, (int)completed.size() - 1);
     app.screen = Screen::Lesson;
     enter(app, furthest);
+    // first visit of a lesson: start with its explanation
+    reading = app.auto_reading && !app.lessons[index].reading.empty() &&
+              std::none_of(completed.begin(), completed.end(), [](bool b) { return b; });
+    reading_scroll = 0;
 }
 void StepScreen::enter(App &app, int index) {
     if (job.valid() || generated_job.valid())
@@ -121,7 +126,7 @@ void StepScreen::enter(App &app, int index) {
     order_cards = {};
     step_index = index;
     loaded = true;
-    debugging = notes = model_answer = submitted = explored = false;
+    debugging = notes = model_answer = submitted = explored = revealed = false;
     text_scroll = code_scroll = feedback_scroll = 0;
     answer = {};
     explanation = {};
@@ -133,6 +138,7 @@ void StepScreen::enter(App &app, int index) {
     choice = -1;
     explain_request = -1;
     const auto &l = app.lessons[lesson_index];
+    focus_answer = l.steps[index].kind == StepKind::Predict;   // ready to type straight away
     const auto &s = l.steps[step_index];
     order = s.kind == StepKind::Order ? order_shuffled(s) : std::vector<int>{};
     code.set_text(!s.code.empty() ? s.code : !s.starter.empty() ? s.starter : l.starter_code);
@@ -160,6 +166,7 @@ void StepScreen::mark_complete(App &app) {
         return;
     const std::string &id = app.lessons[lesson_index].id;
     bool changed = !completed[step_index];
+    bool all_before = std::all_of(completed.begin(), completed.end(), [](bool value) { return value; });
     completed[step_index] = true;
     app.step_progress[id].insert(step_index);
     furthest = std::max(furthest, std::min(step_index + 1, (int)completed.size() - 1));
@@ -173,6 +180,14 @@ void StepScreen::mark_complete(App &app) {
         progress_save(app.progress_path(), app.progress);
     if (changed || was_complete != all)
         app.save_steps();
+    // rewards: every new step gives XP; finishing a lesson the first time adds to the streak
+    if (changed)
+        app.rewards.step_done();
+    if (all && !all_before) {   // (Practice may already have marked the lesson complete itself)
+        app.celebration_xp = app.rewards.lesson_done() + 10;
+        if (app.guides)
+            app.celebration = app.lessons[lesson_index].title;
+    }
 }
 void StepScreen::launch_debug(App &app, const std::string &operation) {
     if (job.valid())
@@ -251,6 +266,30 @@ void StepScreen::update_and_draw(App &app) {
     bool waiting = busy();
     const bool navigation = !waiting && !order_cards.active();
     float w = GetScreenWidth(), h = GetScreenHeight(), m = 24;
+    if (reading) {   // "Read the lesson": the topic explained, before or between the steps
+        draw_text(g_fonts.ui, 15, "Read the lesson", 32, 22, theme::accent);
+        draw_text(g_fonts.title, 28, l.title, 32, 44, theme::text);
+        if (button({w - 190, 20, 158, 36}, "Ask the tutor", true, ButtonStyle::Soft))
+            app.tutor.open(l, "", "The student is reading the lesson explanation:\n" + l.reading);
+        float cw = std::min(980.0f, w - 64), cx = (w - cw) / 2;
+        Rectangle page{cx, 96, cw, h - 180};
+        DrawRectangleRounded(page, 0.02f, 8, theme::panel);
+        DrawRectangleRoundedLinesEx(page, 0.02f, 8, 1, theme::border);
+        draw_rich_text({page.x + 32, page.y + 24, page.width - 52, page.height - 40}, l.reading, reading_scroll);
+        if (button({w - 32 - 230, h - 63, 230, 40},
+                   std::none_of(completed.begin(), completed.end(), [](bool b) { return b; }) ? "Start the steps →"
+                                                                                           : "Back to the step",
+                   true, ButtonStyle::Primary) ||
+            (IsKeyPressed(KEY_ESCAPE) && !app.tutor.visible)) {
+            reading = false;
+            reading_scroll = 0;
+        }
+        if (button({32, h - 63, 160, 40}, "← Lessons", true, ButtonStyle::Ghost)) {
+            reading = false;
+            app.screen = Screen::Course;
+        }
+        return;
+    }
     if (notes) {
         draw_text(g_fonts.title, 27, "Lesson notes — " + l.title, 32, 26, theme::text);
         std::string text;
@@ -259,6 +298,12 @@ void StepScreen::update_and_draw(App &app) {
                 text += name(step.kind) + ": " + step.title + "\n" + step.text + "\n\n";
         text += l.theory;
         text_card({32, 80, w - 64, h - 160}, text, theme::text, &text_scroll);
+        if (!l.reading.empty() && button({w - 420, h - 62, 188, 40}, "Read the lesson", true)) {
+            notes = false;
+            reading = true;
+            reading_scroll = 0;
+            return;
+        }
         if (button({w - 220, h - 62, 188, 40}, "Back to my code", true, ButtonStyle::Primary)) {
             notes = false;
             text_scroll = 0;
@@ -277,8 +322,8 @@ void StepScreen::update_and_draw(App &app) {
         app.screen = Screen::Course;
         return;
     }
-    draw_text(g_fonts.ui_bold, 20, fit_text(g_fonts.ui_bold, 20, l.title, w - 670), m + 134, 25, theme::text);
-    float spacing = std::min(23.0f, 240.0f / l.steps.size()), start = w - 230 - spacing * l.steps.size();
+    draw_text(g_fonts.ui_bold, 20, fit_text(g_fonts.ui_bold, 20, l.title, w - 860), m + 134, 25, theme::text);
+    float spacing = std::min(23.0f, 240.0f / l.steps.size()), start = w - 420 - spacing * l.steps.size();
     for (size_t i = 0; i < l.steps.size(); ++i) {
         Vector2 p{start + i * spacing, 36};
         DrawCircleV(p, 5,
@@ -293,6 +338,12 @@ void StepScreen::update_and_draw(App &app) {
                 return;
             }
         }
+    }
+    if (!l.reading.empty() &&
+        button({w - m - 164 - 12 - 190, 18, 190, 36}, "Read the lesson", navigation, ButtonStyle::Ghost)) {
+        reading = true;
+        reading_scroll = 0;
+        return;
     }
     if (button({w - m - 164, 18, 164, 36}, "Ask the tutor", navigation, ButtonStyle::Soft))
         app.tutor.open(generated_task ? app.lesson.task : l,
@@ -327,7 +378,18 @@ void StepScreen::update_and_draw(App &app) {
         }
     }
     bool write = editing(s.kind) && !debugging;
-    std::string feedback = !error.empty() ? error : submitted ? verdict.feedback : "";
+    const bool guess = s.kind == StepKind::Predict || s.kind == StepKind::Choose || s.kind == StepKind::Order;
+    const bool try_again = guess && submitted && !verdict.correct && !revealed;
+    std::string feedback = !error.empty() ? error
+                           : !submitted   ? ""
+                           : try_again && s.kind == StepKind::Predict
+                               ? "Not quite. Read the code once more, line by line, and try again. Stuck? Press Show answer."
+                           : try_again && s.kind == StepKind::Choose
+                               ? "Not quite. Try another option, or press Show answer."
+                           : revealed && s.kind == StepKind::Predict && !verdict.correct
+                               ? "The answer is: " + verdict.expected + "\nType it in and press Check to go on.\n\n" +
+                                     verdict.feedback
+                               : verdict.feedback;
     float feedback_height =
         feedback.empty() || write
             ? 0
@@ -400,9 +462,15 @@ void StepScreen::update_and_draw(App &app) {
                                           : 52;
         Rectangle left{body.x, body.y, body.width * .46f, body.height},
             right{body.x + body.width * .46f + 18, body.y, body.width * .54f - 18, body.height};
-        show_code(code, {left.x, left.y, left.width, std::max(80.0f, left.height - controls - 12)},
-                  s.kind == StepKind::Predict && !submitted ? s.predict_line : state.line);
-        float y = left.y + left.height - controls;
+        float code_h = std::max(80.0f, left.height - controls - 12);
+        if (s.kind == StepKind::Predict) {   // no tall empty code box: fit the code, answer right below
+            int n = 1 + (int)std::count(s.code.begin(), s.code.end(), '\n');
+            code_h = std::min(code_h, n * std::round(g_fonts.mono_size * 1.45f) + 70.0f);
+        }
+        show_code(code, {left.x, left.y, left.width, code_h},
+                  s.kind == StepKind::Predict && !(submitted && (verdict.correct || revealed)) ? s.predict_line
+                                                                                             : state.line);
+        float y = s.kind == StepKind::Predict ? left.y + code_h + 26 : left.y + left.height - controls;
         if (exploring) {
             draw_text(g_fonts.ui, 14, fit_text(g_fonts.ui, 14, scene.title, left.width), left.x, y,
                       theme::text_dim);
@@ -434,19 +502,29 @@ void StepScreen::update_and_draw(App &app) {
                 mark_complete(app);
             }
         } else if (s.kind == StepKind::Predict) {
-            draw_text(g_fonts.ui, 15,
-                      s.predict_expr.empty() ? "Your prediction: what will the program print?"
-                                             : "Your prediction for " + s.predict_expr,
-                      left.x, y, theme::text_dim);
+            Rectangle card{left.x, y - 10, left.width, 112};
+            Color edge = submitted ? (verdict.correct ? theme::success : theme::warning) : theme::accent;
+            DrawRectangleRounded(card, 0.12f, 8, theme::accent_soft);
+            DrawRectangleRoundedLinesEx(card, 0.12f, 8, 2, edge);
+            draw_text(g_fonts.ui_bold, 16,
+                      s.predict_expr.empty() ? "Your answer: what will the program print?"
+                                             : "Your answer: what is " + s.predict_expr + "?",
+                      card.x + 16, card.y + 14, theme::text);
             std::string previous_answer = answer.text;
-            text_input({left.x, y + 27, left.width, 38}, answer,
-                       s.predict_expr.empty() ? "Type the printed text" : "Type a value or a pointer target");
+            if (focus_answer && !app.tutor.visible) {
+                answer.focused = true;
+                g_focus = Focus::Input;
+                focus_answer = false;
+            }
+            text_input({card.x + 16, card.y + 46, card.width - 32, 48}, answer,
+                       s.predict_expr.empty() ? "Type the printed text here, then press Check"
+                                              : "Type a value here, then press Check");
             if (answer.text != previous_answer) {
                 submitted = false;
                 verdict = {};
             }
-            if (submitted)
-                draw_text(g_fonts.ui, 14, "The picture shows the measured result.", left.x, y + 78,
+            if (submitted && (verdict.correct || revealed))
+                draw_text(g_fonts.ui, 14, "The picture shows what the program really did.", left.x, y + 114,
                           theme::text_dim);
         } else {
             float control_x = left.x;
@@ -473,7 +551,9 @@ void StepScreen::update_and_draw(App &app) {
                                  IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? "out" : "into");
             }
         }
-        if ((exploring || submitted || s.kind == StepKind::Watch || debugging) && error.empty()) {
+        bool show_picture = exploring || s.kind == StepKind::Watch || debugging ||
+                            (submitted && (verdict.correct || revealed || s.kind != StepKind::Predict));
+        if (show_picture && error.empty()) {
             picture.update_and_draw(state, right, s.show, l.topic, waiting,
                                     s.kind == StepKind::Predict ? s.predict_expr : "");
             if (!state.note.empty() &&
@@ -484,11 +564,30 @@ void StepScreen::update_and_draw(App &app) {
                     "Explain why the last action produced this measured result. Do not invent values.");
             }
         } else
-            text_card(right,
-                      error.empty() ? "Make your prediction first. After Check, this picture will show what "
-                                      "the program actually did."
-                                    : error,
-                      theme::text_dim);
+        {
+            if (!error.empty())
+                text_card(right, error, theme::text_dim);
+            else {   // placeholder: centred, not a lonely line at the top of an empty box
+                panel(right);
+                std::string head = submitted ? "Not yet" : "Your prediction first";
+                std::string body = submitted ? "When your answer is right, or you press Show answer, this picture "
+                                               "shows what the program really did."
+                                             : "After Check, this picture shows what the program really did, "
+                                               "line by line.";
+                float tw = std::min(right.width - 80, 520.0f);
+                auto lines = wrap_text(g_fonts.ui, 17, body, tw);
+                float total = 34 + lines.size() * 26.0f;
+                float ty = right.y + (right.height - total) / 2;
+                float hw = text_width(g_fonts.ui_bold, 22, head);
+                draw_text(g_fonts.ui_bold, 22, head, right.x + (right.width - hw) / 2, ty, theme::text);
+                ty += 40;
+                for (const auto &line : lines) {
+                    float lw = text_width(g_fonts.ui, 17, line);
+                    draw_text(g_fonts.ui, 17, line, right.x + (right.width - lw) / 2, ty, theme::text_dim);
+                    ty += 26;
+                }
+            }
+        }
     }
     waiting = busy();
     if (feedback_height) {
@@ -499,9 +598,49 @@ void StepScreen::update_and_draw(App &app) {
         text_card({m, h - 94 - feedback_height, w - 2 * m, feedback_height}, feedback, color,
                   &feedback_scroll);
     }
+    if (app.guides) {   // Bit the raccoon cheers and gives one small tip at a time
+        static const char *praise[] = {"Great job! That's exactly right.", "Nice! You're getting the hang of it.",
+                                       "Yes! Keep that streak going."};
+        std::string tip;
+        int mood = 0;
+        bool right = submitted && verdict.correct;
+        if (right || (write && app.lesson.just_completed)) {
+            tip = praise[step_index % 3];
+            mood = 1;
+        } else if (try_again)
+            tip = "Almost! Look again, line by line. Stuck? Show answer is right there.";
+        else if (write)
+            tip = "Run often. An error is a clue, not a failure. Ask me if you get stuck!";
+        else if (s.kind == StepKind::Watch)
+            tip = state.finished ? "Done! Press Next when you're ready." : "Press Next line and watch the picture change.";
+        else if (s.kind == StepKind::Explore)
+            tip = "Play with it! Nothing can break here.";
+        else if (s.kind == StepKind::Predict)
+            tip = "Think first, then type. Read the code from the top.";
+        else if (s.kind == StepKind::Choose)
+            tip = "Read every option before you pick one.";
+        else if (s.kind == StepKind::Order)
+            tip = "What has to happen first? Start there.";
+        else if (s.kind == StepKind::Explain) {
+            tip = "Use your own words. Two short sentences are enough.";
+            mood = 2;
+        }
+        float room = (w - m - 185 - 12 - 165 - 24) - (m + 118 + 56);
+        if (!tip.empty() && room > 220)
+            mascot_say(m + 118, h - 43, 20, tip, mood, std::min(560.0f, room));
+    }
     if (button({m, h - 63, 100, 40}, "← Back", step_index > 0 && navigation, ButtonStyle::Ghost)) {
         enter(app, step_index - 1);
         return;
+    }
+    if (try_again && button({w - m - 185 - 12 - 165, h - 63, 165, 40}, "Show answer", navigation)) {
+        revealed = true;
+        if (s.kind == StepKind::Order) {   // put the cards in the right order; Check then passes
+            for (size_t i = 0; i < order.size(); ++i) order[i] = (int)i;
+            submitted = false;
+            verdict = {};
+            verdict.feedback = "";
+        }
     }
     bool passed = write ? app.lesson.just_completed : verdict.correct;
     bool watch = (s.kind == StepKind::Watch || debugging);

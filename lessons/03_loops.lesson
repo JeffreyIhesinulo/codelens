@@ -18,6 +18,40 @@ To add numbers up, keep a running total in a variable that starts at 0.
 Your task: read n and print the sum 1 + 2 + ... + n.
 For n = 5 the answer is 15. For n = 0 the answer is 0.
 
+@read
+## Doing something again and again
+A loop repeats a block of code. The most common loop in C is `for`. It has three parts, separated by semicolons:
+
+    for (int i = 0; i < 3; i++) {
+        printf("Hi ");
+    }
+    // prints: Hi Hi Hi
+
+1. `int i = 0` runs once, at the start: it creates a counter.
+2. `i < 3` is checked before every round. When it becomes false, the loop stops.
+3. `i++` runs after every round: it adds 1 to i.
+
+## Following the counter
+- Round 1: i is 0, 0 < 3 is true, print
+- Round 2: i is 1, 1 < 3 is true, print
+- Round 3: i is 2, 2 < 3 is true, print
+- Then i is 3, 3 < 3 is false, the loop ends
+
+## Adding things up
+A loop often collects a result in a variable that starts at 0:
+
+    int sum = 0;
+    for (int i = 1; i <= 4; i++) {
+        sum += i;           // the same as sum = sum + i
+    }
+    // sum is now 1 + 2 + 3 + 4 = 10
+
+## A common mistake
+`<` and `<=` change how many rounds run. `i < 5` stops before 5; `i <= 5` also runs with i = 5. When a loop runs one time too many or too few, check this first.
+
+## Read more
+Beej's Guide to C Programming, chapter 3 "Variables and Statements", sections on while and for loops — free at beej.us/guide/bgc
+
 @starter
 #include <stdio.h>
 

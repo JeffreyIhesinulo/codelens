@@ -1,0 +1,247 @@
+@id     08_cpp_vectors
+@title  Vectors
+@topic  arrays
+@lang   cpp
+@show   values
+
+@theory
+A std::vector is an array that can grow. You do not choose its size in advance.
+
+    #include <vector>
+
+    std::vector<int> v = {3, 8, 1};   // three boxes: v[0], v[1], v[2]
+    v.push_back(5);                    // a fourth box is added at the end
+    v.size()                           // how many boxes there are now: 4
+
+Boxes are numbered from 0, like in a C array. A range-for visits every box in order:
+
+    for (int x : v) {
+        std::cout << x << " ";
+    }
+
+Your task: read n (1..100) and then n integers into a vector, and print them in reverse
+order, separated by spaces.
+
+Input:   4
+         3 9 -2 5
+Output:  5 -2 9 3
+
+@read
+## An array that can grow
+A C array has a fixed size. A std::vector is like an array, but it can grow while the program runs. It keeps track of its own size.
+
+    #include <vector>
+
+    std::vector<int> v = {3, 8, 1};   // three boxes
+    v.push_back(5);                    // now four: {3, 8, 1, 5}
+
+## Using a vector
+- `v[0]` is the first box. Numbering starts at 0, like in a C array.
+- `v.size()` is the number of boxes right now.
+- `v.push_back(x)` adds x as a new box at the end.
+
+## Visiting every box
+A range-for goes through the boxes in order. Read it as "for every x in v":
+
+    for (int x : v) {
+        std::cout << x << " ";
+    }
+
+When you need the index too, use a counting loop from 0 up to, but not including, v.size():
+
+    for (int i = 0; i < (int)v.size(); i++) {
+        std::cout << i << ": " << v[i] << std::endl;
+    }
+
+## When to use which
+Use a vector when you do not know in advance how many values there will be, for example when reading numbers until the input ends. It also frees its memory by itself, so there is no free to forget.
+
+## Read more
+learncpp.com, "Introduction to std::vector and list constructors"
+
+@starter
+#include <iostream>
+#include <vector>
+
+int main() {
+    int n;
+    std::cin >> n;
+
+    std::vector<int> v;
+    for (int i = 0; i < n; i++) {
+        int x;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    // print the numbers in reverse order
+
+    std::cout << std::endl;
+    return 0;
+}
+
+@solution
+#include <iostream>
+#include <vector>
+
+int main() {
+    int n;
+    std::cin >> n;
+
+    std::vector<int> v;
+    for (int i = 0; i < n; i++) {
+        int x;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    for (int i = (int)v.size() - 1; i >= 0; i--) {
+        std::cout << v[i] << " ";
+    }
+
+    std::cout << std::endl;
+    return 0;
+}
+
+@test
+@input
+4
+3 9 -2 5
+@expected
+5 -2 9 3
+
+@test
+@input
+1
+42
+@expected
+42
+
+@hidden_test
+@input
+3
+1 2 3
+@expected
+3 2 1
+
+#! ------------------------------------------------------------------
+#! Steps: Explore -> Understand -> Practice. The task above is the Practice step.
+#! ------------------------------------------------------------------
+
+@step watch
+@title  Watch a vector grow
+@code
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v;
+    v.push_back(4);
+    v.push_back(7);
+    v.push_back(2);
+    int total = 0;
+    for (int x : v) {
+        total += x;
+    }
+    std::cout << total << std::endl;
+    return 0;
+}
+@text
+Press Next line and watch the vector get a new box after every push_back.
+The vector starts empty. The range-for then visits the boxes one by one and adds them up.
+
+@step predict
+@title  Predict the size
+@code
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v = {10, 20, 30};
+    v.push_back(40);
+    v.push_back(50);
+    int n = v.size();
+    std::cout << n << std::endl;
+    return 0;
+}
+@line   8
+@expr   n
+@text
+What is n after line 8 runs?
+The vector starts with three boxes. Count every push_back.
+
+@step choose
+@title  The first box
+@code
+std::vector<int> v = {5, 6, 7};
+@text
+Which expression gives the first box of v?
+@option v[1]
+@option v[0]
+@option v.size()
+@option v[3]
+@correct 2
+@answer
+Boxes are numbered from 0, so the first box is v[0]. v[3] would be outside the vector.
+
+@step order
+@title  Fill and print
+@text
+Put the lines in order: make a vector, add two numbers, then print every box.
+@code
+std::vector<int> v;
+v.push_back(1);
+v.push_back(2);
+for (int x : v) {
+    std::cout << x << " ";
+}
+
+@step find_bug
+@title  Find the bug
+@text
+Fix the loop so it adds up every box, including the first one.
+Right now the program prints 12 instead of 15.
+@starter
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v = {3, 5, 7};
+    int total = 0;
+    for (int i = 1; i < (int)v.size(); i++) {
+        total += v[i];
+    }
+    std::cout << total << std::endl;
+    return 0;
+}
+@editable 7-7
+@solution
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v = {3, 5, 7};
+    int total = 0;
+    for (int i = 0; i < (int)v.size(); i++) {
+        total += v[i];
+    }
+    std::cout << total << std::endl;
+    return 0;
+}
+@test
+@expected
+15
+
+@step explain
+@title  Explain it
+@text
+When would you use a std::vector instead of a plain array like int a[5]?
+@rubric
+grow; size; push_back; unknown; change
+@answer
+A plain array has a fixed size chosen in advance. A vector can grow with push_back, so it
+fits when you do not know how many values there will be, and v.size() always tells you
+how many boxes it has.
+
+@step practice
+@title  Practice

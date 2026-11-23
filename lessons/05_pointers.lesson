@@ -23,6 +23,38 @@ The program reads a and b and prints them after the swap.
 Input:   3 5
 Output:  5 3
 
+@read
+## Every box has an address
+Each variable lives somewhere in memory. That place has a number called its address. `&x` means "the address of x".
+
+## A pointer stores an address
+A pointer is a variable that holds the address of another variable. We say it "points to" that variable.
+
+    int x = 3;
+    int *p = &x;     // p points to x
+    *p = 10;         // change the box p points to: x is now 10
+
+- `int *p` creates a pointer to an int.
+- `p = &x` makes p point to x.
+- `*p` means "the box p points to". Reading `*p` gives 10; writing `*p = 10` changes x.
+
+## Why pointers are useful
+A function gets copies of its arguments. To let a function change the caller's variables, give it their addresses:
+
+    void swap(int *a, int *b) {
+        int t = *a;
+        *a = *b;
+        *b = t;
+    }
+
+    swap(&x, &y);    // x and y really change places
+
+## NULL: pointing nowhere
+`NULL` means "this pointer has no target". Using `*p` when p is NULL crashes the program (a segmentation fault), so always check before you use it.
+
+## Read more
+Beej's Guide to C Programming, chapter 5 "Pointers — Cower In Fear!" — free at beej.us/guide/bgc
+
 @starter
 #include <stdio.h>
 

@@ -100,6 +100,7 @@ struct Lesson {
     Lang lang = Lang::C;
     // Practice task (the original lesson format)
     std::string theory;
+    std::string reading;   // @read: the lesson explained ("Read the lesson"): "## " headings, 4-space code
     std::string starter_code;
     std::string solution;      // reference solution, never shown to the student
     std::vector<TestCase> tests;

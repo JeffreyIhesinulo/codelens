@@ -3,7 +3,7 @@
 //
 // Lesson level (the Practice task — the original format, still valid on its own):
 //   @id 03_loops   @title Loops   @topic for loops   @lang c|cpp
-//   @theory / @starter / @solution   blocks
+//   @theory / @read / @starter / @solution   blocks
 //   @test or @hidden_test, then @input / @expected blocks
 //
 // Steps (optional, in order). Each starts with "@step <kind>" and owns the sections after it:
@@ -157,6 +157,7 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
             }
         } else if (step < 0) {
             if      (section == "theory")   out.theory = v;
+            else if (section == "read")     out.reading = code_v;
             else if (section == "starter")  out.starter_code = code_v;
             else if (section == "solution") out.solution = code_v;
         } else {
@@ -233,6 +234,7 @@ bool lesson_parse(const std::string& text, Lesson& out, std::string& error) {
             test = (int)tests().size() - 1;
             tests()[test].hidden = key == "hidden_test";
         }
+        else if (key == "read" && step < 0) section = key;
         else if (key == "theory" || key == "starter" || key == "solution" || key == "input" ||
                  key == "expected" || key == "text" || key == "code" || key == "rubric" || key == "answer") {
             if (step < 0 && (key == "text" || key == "code" || key == "rubric" || key == "answer"))

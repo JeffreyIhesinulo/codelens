@@ -20,6 +20,39 @@ Input:   4
          3 9 -2 5
 Output:  9
 
+@read
+## Many boxes with one name
+A variable is one box. An array is a row of boxes of the same type, under one name. You choose how many boxes there are when you create it.
+
+    int a[5] = {10, 20, 30, 40, 50};
+
+## Numbering starts at 0
+The boxes are numbered (indexed) from 0. So `int a[5]` has a[0], a[1], a[2], a[3] and a[4]. There is no a[5].
+
+    printf("%d\n", a[0]);   // 10, the first box
+    printf("%d\n", a[4]);   // 50, the last box
+    a[2] = 99;               // change the middle box
+
+## Arrays and loops
+A loop visits every box. The counter is used as the index:
+
+    for (int i = 0; i < 5; i++) {
+        printf("%d ", a[i]);
+    }
+
+Use `i < 5`, not `i <= 5`. With `<=` the loop also reads a[5], which is outside the array. C does not stop you, so CodeLens builds your code with AddressSanitizer: it reports this kind of bug instead of printing garbage.
+
+## Finding the largest value
+Start with the first box, then compare it with every other box:
+
+    int best = a[0];
+    for (int i = 1; i < 5; i++) {
+        if (a[i] > best) best = a[i];
+    }
+
+## Read more
+Beej's Guide to C Programming, chapter 6 "Arrays" — free at beej.us/guide/bgc
+
 @starter
 #include <stdio.h>
 

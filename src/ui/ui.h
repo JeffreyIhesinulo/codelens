@@ -45,6 +45,7 @@ bool fonts_load(const std::string& assets_dir);
 void fonts_unload();
 
 // ---------------------------------------------------------------- text helpers
+float text_scale(const Font& f);   // 1.15 for UI fonts, 1 for code
 float text_width(const Font& f, float size, const std::string& s);
 void  draw_text(const Font& f, float size, const std::string& s, float x, float y, Color c);
 std::string fit_text(const Font& f, float size, const std::string& s, float width);
