@@ -769,6 +769,52 @@ static bool said(const std::vector<std::string>& notes, const std::string& part)
     return false;
 }
 
+TEST(test_heap_narration_layouts) {
+    ProgramState before;
+    before.line = 10;
+    before.stack = {{"main", 10, {{"head", "struct node *", "pointer", 0x5000, true, 0x1000, {}}}}};
+    before.heap = {{0x1000, 16, false,
+                    {{"value", "int", "0", 0x1000, false, 0, {}},
+                     {"next", "struct node *", "NULL", 0x1008, true, 0, {}}}},
+                   {0x2000, 16, false, {}}};
+    ProgramState after = before;
+    after.line = 11;
+    after.heap[0].cells[0].value = "1";
+    after.heap[0].cells[1].points_to = 0x2000;
+    after.heap[0].cells[1].value = "pointer";
+    const std::string expected = "Line 10: head->value changed from 0 to 1; head->next now points to heap block 2.";
+    CHECK(describe_step(before, after, 10, "") == expected);
+    auto wrap = [](ProgramState& state) {
+        auto fields = state.heap[0].cells;
+        state.heap[0].cells = {{"[0]", "struct node", "", 0x1000, false, 0, fields}};
+    };
+    wrap(after);
+    CHECK(describe_step(before, after, 10, "") == expected);
+    wrap(before);
+    CHECK(describe_step(before, after, 10, "") == expected);
+
+    // A real array of structs must retain its index, including when an inner field changes.
+    before.heap[0].cells.push_back(before.heap[0].cells.front());
+    before.heap[0].cells[1].name = "[1]";
+    after = before;
+    after.heap[0].cells[1].children[0].value = "7";
+    CHECK(describe_step(before, after, 10, "") == "Line 10: head[1].value changed from 0 to 7.");
+
+    // A single scalar allocation still uses pointer indexing.
+    before.heap[0].cells = {{"[0]", "int", "0", 0x1000, false, 0, {}}};
+    before.stack[0].vars[0].type = "int *";
+    after = before;
+    after.heap[0].cells[0].value = "2";
+    CHECK(describe_step(before, after, 10, "") == "Line 10: head[0] changed from 0 to 2.");
+
+    // An array inside an array is not a struct wrapper.
+    before.heap[0].cells = {{"[0]", "int [1]", "", 0x1000, false, 0,
+                            {{"[0]", "int", "0", 0x1000, false, 0, {}}}}};
+    after = before;
+    after.heap[0].cells[0].children[0].value = "3";
+    CHECK(describe_step(before, after, 10, "") == "Line 10: head[0][0] changed from 0 to 3.");
+}
+
 TEST(test_linked_list_narration) {
     std::vector<std::string> n = narrate(
         "#include <stdio.h>\n"
@@ -895,6 +941,7 @@ int main() {
     RUN(test_lesson_v3_format);
     RUN(test_order_and_choose);
     RUN(test_step_narration);
+    RUN(test_heap_narration_layouts);
     RUN(test_linked_list_narration);
     RUN(test_hidden_until_declared);
 

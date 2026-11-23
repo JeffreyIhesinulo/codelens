@@ -24,6 +24,7 @@ with the exact line instead of silently producing garbage.
 - Code editor: syntax highlighting, selection, copy/cut/paste, undo/redo and protected template lines
 - Order cards can be dragged or moved with arrow buttons
 - Output, condition branches, loop counters and selected array boxes follow the program state
+- Linked list nodes show next links, NULL, the traversal pointer and memory returned with free
 - **Run** compiles and runs the code (3 s time limit) using the first test's input
 - **Check** runs all tests, including hidden ones, and explains the first failure
 - Compile errors and memory errors are highlighted in the editor
@@ -64,7 +65,8 @@ cmake --build build -j
 ./build/codelens
 ./build/tests           # engine checks
 ./build/ui_tests        # UI journey checks; needs a display (xvfb-run -a on Linux)
-./build/ui_interaction_checks # selection, dragging, progress migration and lessons 1–4; needs a display
+./build/ui_interaction_checks # selection, dragging, progress and guided lessons including lists; needs a display
+./build/ui_interaction_checks --lists-only # linked list visuals and the complete lesson; needs a display
 ```
 
 Engine and tests only (no raylib): `cmake -B build -DBUILD_APP=OFF`.
@@ -73,7 +75,7 @@ On first launch, the welcome screen introduces the three learning stages and ope
 lesson 1. Its setting is stored in `welcome.txt` next to `progress.txt`. Opening
 a lesson follows its steps in order; the final Practice step contains the editor,
 console and tutor. Other steps use their own interactions and checks. Hello, Conditions,
-Loops, Arrays and Pointers now have guided journeys. Lessons without explicit steps
+Loops, Arrays, Pointers and Linked lists now have guided journeys. Lessons without explicit steps
 still open directly in Practice; lesson content remains Jeffrey's part.
 Step progress is saved in `steps.json`; editable tasks use separate files in `drafts/`.
 When lesson content changes, completed matching steps are retained and new steps remain unfinished.

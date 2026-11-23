@@ -338,6 +338,212 @@ void progress_checks(const std::string &root) {
     check(old.step_progress["01_hello"].count(1) && !old.step_progress["01_hello"].count(0),
           "Step progress follows unchanged content after insertion");
 }
+void list_checks(Harness &h, const std::string &root) {
+    SetWindowSize(1100, 800);
+    auto node = [](uint64_t address, int value, uint64_t next) {
+        return Variable{"[0]",
+                        "struct node",
+                        "",
+                        address,
+                        false,
+                        0,
+                        {{"value", "int", std::to_string(value), address, false, 0, {}},
+                         {"next", "struct node *", next ? "pointer" : "NULL", address + 8, true, next, {}}}};
+    };
+    ProgramState snapshot;
+    snapshot.stack = {{"main",
+                       20,
+                       {{"head", "struct node *", "pointer", 0x5000, true, 0x1000, {}},
+                        {"p", "struct node *", "pointer", 0x5008, true, 0x2000, {}}}}};
+    snapshot.heap = {{0x3000, 16, false, {node(0x3000, 30, 0)}},
+                     {0x2000, 16, false, {node(0x2000, 20, 0x3000)}},
+                     {0x1000, 16, false, {node(0x1000, 10, 0x2000)}}};
+    auto picture = list_picture(snapshot, "head->next->value");
+    check(picture.nodes.size() == 3 && picture.nodes.front().address == 0x1000 &&
+              picture.nodes.back().next == 0 && picture.nodes.back().next_known,
+          "LLDB node layout follows head and next, not allocation order");
+    check(picture.focus_result == "head->next->value = 20" && picture.focused_node == 0x2000,
+          "Pointer expression focuses its measured node");
+    for (auto &block : snapshot.heap) {
+        auto fields = block.cells.front().children;
+        block.cells = std::move(fields);
+    }
+    check(list_picture(snapshot).nodes[1].value == "20", "GDB struct fields use the same chain view");
+    snapshot.heap[0].cells[1].points_to = 0x1000;
+    check(list_picture(snapshot).nodes.size() == 3, "A cycle cannot hang or duplicate the picture");
+    snapshot.heap[0].cells[1].points_to = 0x9999;
+    check(list_picture(snapshot).nodes.back().next == 0x9999, "An invalid link remains visibly invalid");
+    snapshot.heap[1].freed = true;
+    snapshot.heap[1].cells.clear();
+    check(list_picture(snapshot, "head->next->value").focus_result.empty(),
+          "A freed target never supplies a guessed prediction value");
+    snapshot.heap.clear();
+    snapshot.stack[0].vars.push_back(
+        {"nodes", "struct node [2]", "", 0x1000, false, 0, {node(0x1000, 1, 0x2000), node(0x2000, 2, 0)}});
+    check(list_picture(snapshot).nodes.size() == 2, "Stack-based list nodes are supported for Find the bug");
+    Scene allocation = ui_scene_get("heap");
+    auto allocation_state = ui_scene_state(allocation, {"malloc"});
+    check(list_picture(allocation_state).nodes.empty(),
+          "Integer allocation boxes are not mislabeled as nodes");
+
+    App app;
+    app.root = root;
+    app.lessons = lessons_load("lessons");
+    auto lesson = std::find_if(app.lessons.begin(), app.lessons.end(),
+                               [](const Lesson &item) { return item.id == "06_lists"; });
+    check(lesson != app.lessons.end(), "Linked lists lesson is loaded from main");
+    int index = std::distance(app.lessons.begin(), lesson);
+    h.draw = [&] { app.steps.update_and_draw(app); };
+    auto wait = [&] {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(50);
+        while (app.steps.job.valid() || app.lesson.busy()) {
+            if (std::chrono::steady_clock::now() > deadline)
+                throw std::runtime_error("Linked list action timed out");
+            h.frame();
+        }
+        check(app.steps.error.empty(), "Linked list action completes without a debugger error");
+    };
+    auto primary = [&] {
+        h.click(990, GetScreenHeight() - 42);
+        wait();
+        h.frame();
+    };
+    app.steps.open(app, index);
+    wait();
+    h.frame();
+    h.frame();
+    int controls = std::min(
+        210, (int)(65 + app.steps.scene.params.size() * 52 + app.steps.scene.actions.size() / 3 * 38));
+    int actions_y = GetScreenHeight() - 94 - controls + 28 + app.steps.scene.params.size() * 50 + 16;
+    h.click(90, actions_y);
+    check(!app.steps.state.heap.empty() && !app.steps.state.heap.front().freed,
+          "Explore reserves memory before node construction");
+    h.frame("lists-explore-allocated");
+    h.click(275, actions_y);
+    check(app.steps.state.heap.front().freed, "Explore gives memory back");
+    primary();
+    check(app.lessons[index].steps[app.steps.step_index].kind == StepKind::Watch,
+          "Explore advances to Watch");
+    bool saw_chain = false, saw_cursor = false, saw_free = false;
+    for (int i = 0; i < 130 && !app.steps.state.finished; ++i) {
+        primary();
+        auto chain = list_picture(app.steps.state);
+        if (!saw_chain && chain.nodes.size() == 3 && chain.nodes[0].value == "10" &&
+            chain.nodes[1].value == "20" && chain.nodes[2].value == "30" &&
+            chain.nodes[0].next == chain.nodes[1].address && chain.nodes[1].next == chain.nodes[2].address) {
+            saw_chain = true;
+            check(app.steps.state.note.find("head->next now points") != std::string::npos,
+                  "Watch uses the same arrow notation as the lesson code");
+            h.frame("lists-watch-chain");
+        }
+        auto cursor = std::find_if(chain.references.begin(), chain.references.end(), [](const auto &ref) {
+            return ref.name == "p" && ref.known && ref.target;
+        });
+        if (!saw_cursor && cursor != chain.references.end() && chain.nodes.size() == 3 &&
+            cursor->target == chain.nodes[1].address) {
+            saw_cursor = true;
+            h.frame("lists-watch-cursor");
+        }
+        if (!saw_free &&
+            std::any_of(chain.nodes.begin(), chain.nodes.end(), [](const auto &n) { return n.freed; })) {
+            saw_free = true;
+            h.frame("lists-watch-freed");
+        }
+    }
+    check(saw_chain && saw_cursor && saw_free, "Watch shows links, the moving cursor and freed nodes");
+    check(app.steps.state.finished && describe_difference("10 20 30", app.steps.state.output).empty(),
+          "The linked list example prints the measured traversal and finishes");
+    h.frame("lists-watch-finished");
+    primary();
+    app.steps.answer.text = "4";
+    primary();
+    check(!app.steps.verdict.correct, "The list prediction rejects the first node's value");
+    app.steps.answer.text = "7";
+    primary();
+    check(app.steps.verdict.correct, "The list prediction follows next to the correct value");
+    check(list_picture(app.steps.state, "a->next->value").focus_result == "a->next->value = 7",
+          "Predict highlights the actual destination field");
+    h.frame("lists-predict");
+    primary();
+    app.steps.choice = 0;
+    primary();
+    check(app.steps.verdict.correct, "Choose explains NULL termination");
+    primary();
+    std::iota(app.steps.order.begin(), app.steps.order.end(), 0);
+    primary();
+    check(app.steps.verdict.correct, "Order checks the list traversal");
+    primary();
+    app.steps.debugging = true;
+    app.steps.code.set_text(app.lesson.editor.text());
+    app.steps.launch_debug(app, "start");
+    wait();
+    bool saw_stack_chain = false;
+    for (int i = 0; i < 60 && !app.steps.state.finished; ++i) {
+        primary();
+        auto chain = list_picture(app.steps.state);
+        auto p = std::find_if(chain.references.begin(), chain.references.end(),
+                              [](const auto &r) { return r.name == "p" && r.known; });
+        if (!saw_stack_chain && chain.nodes.size() == 3 && p != chain.references.end() &&
+            p->target == chain.nodes.back().address) {
+            saw_stack_chain = true;
+            h.frame("lists-find-bug-chain");
+        }
+    }
+    check(saw_stack_chain, "Find the bug draws the real stack-based node chain and its cursor");
+    check(describe_difference("1 2", app.steps.state.output).empty(),
+          "Find the bug debugger exposes the omitted final node");
+    h.frame("lists-find-bug-debug");
+    primary();
+    check(!app.steps.debugging, "The student can return to editing the faulty traversal");
+    auto bug = app.lessons[index].steps[app.steps.step_index];
+    app.lesson.editor.set_text(bug.solution);
+    app.lesson.editor.lock_template(app.lesson.task.starter_code, bug.edit_from, bug.edit_to);
+    primary();
+    check(app.lesson.just_completed, "Fixing the loop prints all list nodes");
+    primary();
+    app.steps.explanation.text = "NULL marks the end, so the loop stops after the last node.";
+    primary();
+    check(app.steps.submitted, "Explain submits the student's list explanation");
+    primary();
+    app.lesson.editor.set_text(app.lesson.task.solution);
+    app.steps.debugging = true;
+    app.steps.code.set_text(app.lesson.editor.text());
+    app.steps.launch_debug(app, "start");
+    wait();
+    bool saw_built_list = false;
+    for (int i = 0; i < 120 && !app.steps.state.finished; ++i) {
+        primary();
+        auto chain = list_picture(app.steps.state);
+        if (!saw_built_list && chain.nodes.size() == 3 && chain.nodes[0].value == "3" &&
+            chain.nodes[1].value == "2" && chain.nodes[2].value == "1" &&
+            chain.nodes[0].next == chain.nodes[1].address && chain.nodes[1].next == chain.nodes[2].address) {
+            saw_built_list = true;
+            h.frame("lists-practice-debug-chain");
+        }
+    }
+    check(saw_built_list, "Practice Debug reads every link of nodes allocated inside the loop");
+    check(app.steps.state.finished && describe_difference("3 2 1", app.steps.state.output).empty(),
+          "The student's list prints in reverse order and gives its nodes back");
+    primary();
+    primary();
+    check(app.lesson.just_completed, "List Practice passes all visible and hidden tests");
+    h.frame("lists-practice");
+    primary();
+    check(app.screen == Screen::Course && app.progress.completed.count("06_lists"),
+          "The complete linked list journey saves progress");
+    SetWindowSize(1100, 650);
+    h.frame();
+    app.steps.open(app, index);
+    app.steps.enter(app, 2);
+    app.steps.answer.text = "7";
+    primary();
+    check(app.steps.verdict.correct, "The list prediction remains usable in a small window");
+    h.frame("lists-compact-predict");
+    app.steps.shutdown();
+    SetWindowSize(1100, 800);
+    h.draw = [] {};
+    h.frame();
+}
 void lesson_checks(Harness &h, const std::string &root) {
     App app;
     app.root = root;
@@ -491,21 +697,28 @@ int main(int argc, char **argv) {
     std::string root = temporary;
     Harness h;
     const bool console_only = argc > 1 && std::string(argv[1]) == "--console-only";
-    const int screenshots_arg = console_only ? 2 : 1;
+    const bool lists_only = argc > 1 && std::string(argv[1]) == "--lists-only";
+    const int screenshots_arg = console_only || lists_only ? 2 : 1;
     if (argc > screenshots_arg) {
         h.screenshots = argv[screenshots_arg];
         std::filesystem::create_directories(h.screenshots);
     }
     try {
-        std::filesystem::create_directories(root + "/console");
-        console_checks(h, root + "/console");
-        if (!console_only) {
+        if (!lists_only) {
+            std::filesystem::create_directories(root + "/console");
+            console_checks(h, root + "/console");
+        }
+        if (!console_only && !lists_only) {
             editor_checks(h);
             order_checks(h);
             std::filesystem::create_directories(root + "/migration");
             progress_checks(root + "/migration");
             std::filesystem::create_directories(root + "/lessons");
             lesson_checks(h, root + "/lessons");
+        }
+        if (!console_only) {
+            std::filesystem::create_directories(root + "/lists");
+            list_checks(h, root + "/lists");
         }
         h.draw = [] {};
         fonts_unload();

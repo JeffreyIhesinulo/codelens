@@ -74,6 +74,13 @@ guided lesson screen.
 
 Newest first. When the plan changes, add an entry here and update `docs/`.
 
+### 2026-11-23 — linked list lesson visuals
+Ihor requested the new `06_lists` lesson from main and its UI visuals. Show real nodes, next
+links, NULL, the traversal pointer and freed memory in Watch/Predict and Debug my code.
+Support both debugger snapshot layouts without changing the engine contract.
+Ihor also explicitly requested the accompanying single-struct narration fix in
+`src/core/narrate.cpp` and its regression tests; the shared interface stays unchanged.
+
 ### 2026-11-22 — UI follow-up for the expanded lessons
 Ihor requested Order card dragging and editor selection/shortcuts, plus visual support for
 Jeffrey's expanded lessons 1–4. Keep these changes in `src/ui`; lesson content and engine

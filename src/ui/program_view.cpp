@@ -104,6 +104,7 @@ ProgramPictureFacts program_picture_facts(const ProgramState &state, const std::
 }
 void ProgramView::reset() {
     output_scroll = 0;
+    list = {};
     branch.clear();
     previous_note.clear();
 }
@@ -113,6 +114,8 @@ Rectangle ProgramView::why_button(Rectangle area) {
 void ProgramView::update_and_draw(const ProgramState &state, Rectangle area, ShowLevel level,
                                   const std::string &topic, bool waiting, const std::string &focus) {
     const auto facts = program_picture_facts(state, focus);
+    const auto chain = topic == "lists" ? list_picture(state, focus) : ListPicture{};
+    const bool show_list = !chain.nodes.empty() || !chain.references.empty();
     if (state.note != previous_note) {
         if (state.note.find("program starts") != std::string::npos)
             branch.clear();
@@ -142,7 +145,8 @@ void ProgramView::update_and_draw(const ProgramState &state, Rectangle area, Sho
         }
         y += 44;
     }
-    std::string caption = !facts.selected_box.empty()
+    std::string caption = show_list ? chain.focus_result
+                          : !facts.selected_box.empty()
                               ? "Selected box: " + facts.selected_box
                               : (topic.find("loop") != std::string::npos ? facts.counter : "");
     if (!caption.empty()) {
@@ -154,7 +158,16 @@ void ProgramView::update_and_draw(const ProgramState &state, Rectangle area, Sho
     content.y = y;
     const bool memory = facts.has_values || (level >= ShowLevel::Frames && !state.stack.empty()) ||
                         (level == ShowLevel::Heap && !state.heap.empty());
-    if (memory) {
+    if (show_list) {
+        const float output_height = state.output.empty() ? 0 : 30;
+        Rectangle chain_area = content;
+        chain_area.height -= output_height ? output_height + 6 : 0;
+        list.draw(chain, chain_area);
+        if (output_height)
+            draw_text(g_fonts.mono, 15,
+                      fit_text(g_fonts.mono, 15, "Printed: " + state.output, content.width - 16),
+                      content.x + 8, content.y + content.height - 24, theme::success);
+    } else if (memory) {
         const bool compact = content.height < 240;
         float output_height = state.output.empty() ? 0
                               : compact            ? 30
