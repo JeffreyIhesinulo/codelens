@@ -62,7 +62,9 @@ void LessonScreen::open_task(App& app, int index, const Step& step, int step_num
     open(app, index);
     marks_lesson_complete = step.kind == StepKind::Practice;
     task.title = step.title.empty() ? task.title : step.title;
-    if (!step.text.empty()) task.theory = step.text + "\n\n" + app.lessons[index].theory;
+    // Fix-the-bug and modify steps show only their own instruction; the lesson's Practice task
+    // (e.g. "read n and print the largest") belongs to the Practice step and would contradict it.
+    if (!step.text.empty()) task.theory = marks_lesson_complete ? step.text + "\n\n" + app.lessons[index].theory : step.text;
     if (!step.starter.empty()) task.starter_code = step.starter;
     if (!step.solution.empty()) task.solution = step.solution;
     if (!step.tests.empty()) task.tests = step.tests;
@@ -223,8 +225,51 @@ void LessonScreen::draw_theory(App&, Rectangle r) {
     float y = body.y - theory_scroll;
     y += draw_wrapped(g_fonts.title, 24, l.title, {body.x, y, body.width, 0}, theme::text) + 10;
 
+    // The task first, in its own highlighted card: "Your task:" in the lesson text, or the whole
+    // text for a fix-the-bug / modify step. What the lesson explained comes below it.
+    std::string recap = l.theory, todo;
+    size_t mark = recap.find("Your task:");
+    if (mark != std::string::npos) {
+        todo = recap.substr(mark + 10);
+        recap = recap.substr(0, mark);
+    } else {
+        todo = recap;
+        recap.clear();
+    }
+    while (!todo.empty() && (todo[0] == '\n' || todo[0] == ' ')) todo.erase(0, 1);
+    {
+        float pad = 14, inner = body.width - 2 * pad;
+        float h = 34 + draw_rich_block(0, 0, inner, todo, false);
+        const TestCase *example = nullptr;
+        for (const TestCase &t : l.tests)
+            if (!t.hidden) { example = &t; break; }
+        std::string ex;
+        if (example) {
+            ex = (example->input.empty() ? "" : "Input:\n" + example->input) + "Expected output:\n" + example->expected;
+            h += 30 + (std::count(ex.begin(), ex.end(), '\n') + 1) * (g_fonts.mono_size + 5);
+        }
+        Rectangle card{body.x, y, body.width, h + pad};
+        DrawRectangleRounded(card, 0.04f, 8, theme::accent_soft);
+        DrawRectangleRoundedLinesEx(card, 0.04f, 8, 1.5f, theme::accent);
+        draw_text(g_fonts.ui_bold, 18, "Your task", card.x + pad, card.y + 10, theme::accent);
+        float cy = card.y + 40;
+        cy += draw_rich_block(card.x + pad, cy, inner, todo);
+        if (example) {
+            cy += 8;
+            draw_text(g_fonts.ui_bold, 15, "Example", card.x + pad, cy, theme::text_dim);
+            cy += 24;
+            std::istringstream exin(ex);
+            for (std::string el; std::getline(exin, el); cy += g_fonts.mono_size + 5)
+                draw_text(g_fonts.mono, g_fonts.mono_size, el, card.x + pad,
+                          cy, !el.empty() && el.back() == ':' ? theme::text_dim : theme::str);
+        }
+        y += card.height + 18;
+    }
+    if (!recap.empty())
+        y += draw_wrapped(g_fonts.ui_bold, 17, "Lesson recap", {body.x, y, body.width, 0}, theme::text_dim) + 8;
+
     // Paragraphs; lines indented by 4+ spaces form code blocks.
-    std::istringstream in(l.theory);
+    std::istringstream in(recap);
     std::string line, para, code;
     auto flush_para = [&] {
         if (para.empty()) return;
@@ -256,23 +301,17 @@ void LessonScreen::draw_theory(App&, Rectangle r) {
             // trailing blank lines inside a code block
             while (code.size() >= 2 && code.substr(code.size() - 2) == "\n\n") code.pop_back();
             flush_code();
-            para += (para.empty() ? "" : "\n") + line;
+            // A line break inside a sentence (the lesson file is wrapped at ~90 columns) is a
+            // space; after . : ! ? or before a "- " list item it stays a line break.
+            bool sentence_end = !para.empty() && std::string(".:!?").find(para.back()) != std::string::npos;
+            bool list_item = line.rfind("- ", 0) == 0;
+            para += para.empty() ? line : ((sentence_end || list_item) ? "\n" : " ") + line;
         }
     }
     while (code.size() >= 2 && code.substr(code.size() - 2) == "\n\n") code.pop_back();
     flush_para();
     flush_code();
 
-    // visible test as an example
-    for (const TestCase& t : l.tests) {
-        if (t.hidden) continue;
-        y += 6;
-        draw_text(g_fonts.ui_bold, g_fonts.ui_size, "Example", body.x, y, theme::text_dim);
-        y += g_fonts.ui_size + 8;
-        std::string ex = (t.input.empty() ? "" : "Input:\n" + t.input) + "Expected output:\n" + t.expected;
-        y += draw_wrapped(g_fonts.mono, g_fonts.mono_size, ex, {body.x, y, body.width, 0}, theme::text_dim, 5);
-        break;
-    }
     int hidden = 0;
     for (const TestCase& t : l.tests) hidden += t.hidden;
     y += 10;

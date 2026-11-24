@@ -109,7 +109,11 @@ static const char* SYSTEM_PROMPT =
     "The lesson's tests are always correct: never suggest that the test or the checker is wrong. "
     "When a test fails with wrong output, compare the expected and actual output character by character "
     "(punctuation, spaces, capital letters, missing or extra lines) and point to the exact difference. "
-    "The app's own diff line ('First difference on line ...') is reliable; build on it.";
+    "The app's own diff line ('First difference on line ...') is reliable; build on it. "
+    "Speak to the student directly: say 'you' and 'your code', never 'the student'. "
+    "Check the ORDER of the lines first: a variable or array element used before it gets a value "
+    "(before scanf or an assignment, e.g. int max = a[0]; above the loop that reads a) holds random "
+    "garbage; say which line uses it too early. Do not invent values that the program did not print.";
 
 // Lesson task + the latest result the student saw, shared by hint and chat.
 static std::string context(const Lesson& lesson, const std::string& code, const std::string& last_result) {

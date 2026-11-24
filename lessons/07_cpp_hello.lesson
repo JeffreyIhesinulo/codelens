@@ -20,12 +20,15 @@ std::cout is the screen. The arrows << send each piece to it, from left to right
 std::endl ends the line, like \n in C. std::cin >> x reads a value from the keyboard.
 std::string holds text of any length, and + joins two strings.
 
-Your task: read a name (one word) and print exactly:
+Your task:
+The program already reads a name into `name`. Print a greeting with it:
 
-    Hello, <name>!
+    Hello, Sam!
 
-Input:   Sam
-Output:  Hello, Sam!
+- Hello, a comma, a space, the name, then !
+- End the line with `std::endl`.
+
+**Hint:** send the pieces one after another with `<<`.
 
 @read
 ## From C to C++
@@ -172,8 +175,8 @@ std::cout << "Hi " << name << std::endl;
 @step find_bug
 @title  Find the bug
 @text
-Fix the line so the program prints Hello, Ann! on the screen.
-The arrows point the wrong way: >> is for reading with cin, << is for writing with cout.
+Fix line 6 so the program prints Hello, Ann! on the screen.
+Right now the program does not even compile. Compare line 6 with the cout lines you watched in step 1.
 @starter
 #include <iostream>
 #include <string>

@@ -17,11 +17,13 @@ the caller's variables, pass their addresses:
     void set_to_zero(int *v) { *v = 0; }
     set_to_zero(&x);
 
-Your task: write swap so that it exchanges the values of two variables.
-The program reads a and b and prints them after the swap.
+Your task:
+The function `swap` gets the addresses of two variables.
 
-Input:   3 5
-Output:  5 3
+- Make `swap` exchange their values, so `main` prints them the other way round.
+- Example: input 3 5, output 5 3.
+
+**Hint:** use a helper variable: `int t = *a;` then `*a = *b;` then `*b = t;`
 
 @read
 ## Every box has an address

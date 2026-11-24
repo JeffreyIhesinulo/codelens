@@ -19,6 +19,8 @@ float draw_chat(Rectangle area, const std::vector<ChatMessage> &messages, bool t
 // The same formatting for longer texts (the lesson reading): "## " headings, 4-space code
 // blocks, lists, `code` and **bold**. Scrolls inside area.
 float draw_rich_text(Rectangle area, const std::string &text, float &scroll);
+// The same, without its own scrolling: draws at (x, y) and returns the height (draw = false only measures).
+float draw_rich_block(float x, float y, float width, const std::string &text, bool draw = true);
 
 struct TutorPanel {
     bool visible = false;

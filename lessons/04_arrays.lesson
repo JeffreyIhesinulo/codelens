@@ -14,11 +14,14 @@ The last valid index is size - 1. Reading a[5] here is a bug: it touches memory
 that does not belong to the array. CodeLens builds your code with AddressSanitizer,
 so this kind of bug is reported instead of silently giving garbage.
 
-Your task: read n (1..100), then n integers, and print the largest one.
+Your task:
+The program already reads the numbers into the array `a`: boxes `a[0]` to `a[n-1]`.
 
-Input:   4
-         3 9 -2 5
-Output:  9
+- Write your code **below** the loop that reads the numbers (at the comment "find the largest element").
+- Find the largest number in `a` and print it.
+- Example: for the numbers 3 9 -2 5, print 9. For -5 -1 -7, print -1.
+
+**Hint:** after the numbers are read, start with `int best = a[0];`, then compare it with `a[1]` to `a[n-1]`. Before scanf, `a[0]` holds random garbage.
 
 @read
 ## Many boxes with one name

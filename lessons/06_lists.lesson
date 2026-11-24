@@ -23,13 +23,13 @@ until you reach NULL:
 p->value means "the value field of the node that p points to".
 Every node reserved with malloc must be given back with free.
 
-Your task: the program reads n (1..100) and then n integers. Each number is added
-to the front of the list, so the list holds them in reverse order. Print the values
-of the list from head to the end, separated by spaces.
+Your task:
+The program already builds the list from the input. `head` points to the first node.
 
-Input:   3
-         1 2 3
-Output:  3 2 1
+- Print the value of every node, from `head` to the end, with a space after each.
+- Example: for the input 1 2 3 the list is 3, 2, 1, so print 3 2 1.
+
+**Hint:** `for (struct node *p = head; p != NULL; p = p->next)`
 
 @read
 ## A chain of boxes

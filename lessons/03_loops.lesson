@@ -15,8 +15,13 @@ This prints 1, 2, 3. The three parts are: start (int i = 1), condition (i <= 3),
 
 To add numbers up, keep a running total in a variable that starts at 0.
 
-Your task: read n and print the sum 1 + 2 + ... + n.
-For n = 5 the answer is 15. For n = 0 the answer is 0.
+Your task:
+The program already reads a number into `n`, starts `sum` at 0 and prints `sum` at the end.
+
+- Add up all the numbers from 1 to n into `sum`.
+- Example: for n = 5, sum = 1 + 2 + 3 + 4 + 5 = 15.
+
+**Hint:** a `for` loop from 1 to n, with `sum += i;` inside.
 
 @read
 ## Doing something again and again

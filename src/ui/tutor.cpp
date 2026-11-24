@@ -168,6 +168,12 @@ void draw_layout(const Layout &l, float x0, float y0, Color text) {
 
 } // namespace
 
+float draw_rich_block(float x, float y, float width, const std::string &text, bool draw) {
+    Layout l = layout(text, width);
+    if (draw) draw_layout(l, x, y, theme::text);
+    return l.height;
+}
+
 float draw_rich_text(Rectangle area, const std::string &text, float &scroll) {
     Layout l = layout(text, area.width - 16);
     BeginScissorMode((int)area.x, (int)area.y, (int)area.width, (int)area.height);

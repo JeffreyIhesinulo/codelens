@@ -16,9 +16,16 @@ Every C program starts running in main(). To print text, use printf from <stdio.
 
 "\n" moves to a new line. return 0 tells the system the program finished without errors.
 
-Your task: print exactly two lines:
-Hello, CodeLens!
-I am learning C.
+Your task:
+Make the program print exactly these two lines:
+
+    Hello, CodeLens!
+    I am learning C.
+
+- Write your code under the comment "print the two lines here".
+- Use one printf for each line.
+
+**Hint:** end each line with `\n`, like `printf("Hi!\n");`
 
 @read
 ## What is a program?

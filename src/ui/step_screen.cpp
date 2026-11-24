@@ -297,7 +297,17 @@ void StepScreen::update_and_draw(App &app) {
             if (!editing(step.kind))
                 text += name(step.kind) + ": " + step.title + "\n" + step.text + "\n\n";
         text += l.theory;
-        text_card({32, 80, w - 64, h - 160}, text, theme::text, &text_scroll);
+        {   // same formatting as the lesson page: headings, code, lists, **bold**
+            Rectangle page{32, 80, w - 64, h - 160};
+            DrawRectangleRounded(page, 0.02f, 8, theme::panel);
+            DrawRectangleRoundedLinesEx(page, 0.02f, 8, 1, theme::border);
+            std::string rich;
+            for (const auto &step : l.steps)
+                if (!editing(step.kind))
+                    rich += "## " + name(step.kind) + ": " + step.title + "\n" + step.text + "\n\n";
+            rich += "## Practice\n" + l.theory;
+            draw_rich_text({page.x + 24, page.y + 18, page.width - 40, page.height - 30}, rich, text_scroll);
+        }
         if (!l.reading.empty() && button({w - 420, h - 62, 188, 40}, "Read the lesson", true)) {
             notes = false;
             reading = true;
@@ -517,7 +527,7 @@ void StepScreen::update_and_draw(App &app) {
                 focus_answer = false;
             }
             text_input({card.x + 16, card.y + 46, card.width - 32, 48}, answer,
-                       s.predict_expr.empty() ? "Type the printed text here, then press Check"
+                       s.predict_expr.empty() ? "Type the printed text. Several lines? Put a space between them"
                                               : "Type a value here, then press Check");
             if (answer.text != previous_answer) {
                 submitted = false;

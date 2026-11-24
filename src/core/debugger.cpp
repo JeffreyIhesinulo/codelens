@@ -788,6 +788,22 @@ Verdict check_prediction(const Step& step, Lang lang, const std::string& answer)
         RunResult r = run_code(step.code, step.input, lang);
         v.expected = r.output;
         std::string diff = describe_difference(r.output, answer);
+        // The answer box has one line: accept output of several lines typed with spaces
+        // ("Hi there 5") or with \n ("Hi there\n5").
+        auto flat = [](std::string t) {
+            for (size_t p; (p = t.find("\\n")) != std::string::npos;) t.replace(p, 2, " ");
+            std::string out;
+            for (char c : t) {
+                bool space = c == ' ' || c == '\n' || c == '\t' || c == '\r';
+                if (space) { if (!out.empty() && out.back() != ' ') out += ' '; }
+                else out += c;
+            }
+            while (!out.empty() && out.back() == ' ') out.pop_back();
+            return out;
+        };
+        std::string bare = flat(answer);   // "Cold" typed with quotes is still Cold
+        if (bare.size() >= 2 && bare.front() == '"' && bare.back() == '"') bare = bare.substr(1, bare.size() - 2);
+        if (!diff.empty() && r.compiled && (flat(r.output) == flat(answer) || flat(r.output) == bare)) diff.clear();
         v.correct = r.compiled && diff.empty();
         v.feedback = v.correct ? "Right, that is exactly what the program prints."
                                : "Not quite. " + diff;

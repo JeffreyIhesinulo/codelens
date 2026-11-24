@@ -19,12 +19,13 @@ Boxes are numbered from 0, like in a C array. A range-for visits every box in or
         std::cout << x << " ";
     }
 
-Your task: read n (1..100) and then n integers into a vector, and print them in reverse
-order, separated by spaces.
+Your task:
+The program already reads all the numbers into the vector `v`.
 
-Input:   4
-         3 9 -2 5
-Output:  5 -2 9 3
+- Print them in reverse order, the last one first, with a space after each.
+- Example: for 3 9 -2 5, print 5 -2 9 3.
+
+**Hint:** a `for` loop that starts at `v.size() - 1` and counts down to 0.
 
 @read
 ## An array that can grow
@@ -187,7 +188,7 @@ Boxes are numbered from 0, so the first box is v[0]. v[3] would be outside the v
 @step order
 @title  Fill and print
 @text
-Put the lines in order: make a vector, add two numbers, then print every box.
+Put the lines in order: make a vector, add 1 and then 2, then print every box.
 @code
 std::vector<int> v;
 v.push_back(1);
